@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Config — {{ name }} — Bot Panel{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>&#9881; {{ name }} — .env Config</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">&larr; Dashboard</a>
+</div>
+<div class="card">
+    <form method="POST">
+        <textarea name="content" class="code-area" style="min-height:300px;">{{ content }}</textarea>
+        <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
+            <button type="submit" class="btn btn-primary">&#128190; Save</button>
+            <span style="color:var(--text2); font-size:13px;">Restart the bot after saving for changes to take effect.</span>
+        </div>
+    </form>
+</div>
+{% endblock %}

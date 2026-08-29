@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ filepath }} — Bot Panel{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 style="font-size:18px;">{{ filepath }}</h1>
+        <span style="color:var(--text2); font-size:13px;">{{ name }}</span>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{{ url_for('bot_files', name=name) }}" class="btn btn-ghost">&larr; Files</a>
+    </div>
+</div>
+<div class="card" style="padding:12px;">
+    <form method="POST">
+        <textarea name="content" class="code-area" id="codeEditor" spellcheck="false">{{ content }}</textarea>
+        <div style="margin-top:12px; display:flex; gap:8px; align-items:center; justify-content:space-between;">
+            <button type="submit" class="btn btn-primary">&#128190; Save</button>
+            <span style="color:var(--text2); font-size:12px;" id="lineInfo">Ready</span>
+        </div>
+    </form>
+</div>
+
+<script>
+const editor = document.getElementById('codeEditor');
+
+// Tab support
+editor.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 4;
+    }
+    // Ctrl+S / Cmd+S to save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        this.form.submit();
+    }
+});
+
+// Line/col counter
+editor.addEventListener('click', updatePos);
+editor.addEventListener('keyup', updatePos);
+function updatePos() {
+    const val = editor.value.substring(0, editor.selectionStart);
+    const line = val.split('\n').length;
+    const col = val.split('\n').pop().length + 1;
+    document.getElementById('lineInfo').textContent = 'Ln ' + line + ', Col ' + col;
+}
+</script>
+{% endblock %}

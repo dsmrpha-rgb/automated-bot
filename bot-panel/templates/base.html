@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Bot Panel{% endblock %}</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --bg2: #1a1d27;
+            --bg3: #242836;
+            --border: #2e3345;
+            --text: #e1e4ed;
+            --text2: #8b8fa3;
+            --accent: #6c5ce7;
+            --accent2: #a29bfe;
+            --green: #00b894;
+            --red: #e17055;
+            --yellow: #fdcb6e;
+            --blue: #74b9ff;
+            --radius: 10px;
+            --shadow: 0 2px 12px rgba(0,0,0,0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Nav ─────────────────── */
+        .navbar {
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .navbar .logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent2);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .navbar .logo span { font-size: 22px; }
+        .nav-links { display: flex; gap: 6px; align-items: center; }
+        .nav-links a {
+            color: var(--text2);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav-links a:hover { background: var(--bg3); color: var(--text); }
+        .nav-links a.active { background: var(--accent); color: #fff; }
+
+        /* ── Container ───────────── */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* ── Flash messages ──────── */
+        .flash {
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .flash.success { background: rgba(0,184,148,0.15); border: 1px solid var(--green); color: var(--green); }
+        .flash.error { background: rgba(225,112,85,0.15); border: 1px solid var(--red); color: var(--red); }
+
+        /* ── Cards ───────────────── */
+        .card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+        }
+        .card h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+
+        /* ── Buttons ─────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: #fff;
+        }
+        .btn-primary { background: var(--accent); }
+        .btn-primary:hover { background: var(--accent2); }
+        .btn-green { background: var(--green); }
+        .btn-green:hover { opacity: 0.85; }
+        .btn-red { background: var(--red); }
+        .btn-red:hover { opacity: 0.85; }
+        .btn-yellow { background: #e17055; color: #fff; }
+        .btn-ghost {
+            background: var(--bg3);
+            color: var(--text2);
+            border: 1px solid var(--border);
+        }
+        .btn-ghost:hover { color: var(--text); border-color: var(--text2); }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        /* ── Forms ───────────────── */
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text2);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .form-group textarea {
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            resize: vertical;
+        }
+
+        /* ── Status badges ───────── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-active { background: rgba(0,184,148,0.15); color: var(--green); }
+        .badge-inactive { background: rgba(225,112,85,0.15); color: var(--red); }
+        .badge-other { background: rgba(253,203,110,0.15); color: var(--yellow); }
+        .badge::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* ── Table ───────────────── */
+        .table-wrap { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        th { color: var(--text2); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        tr:hover { background: var(--bg3); }
+
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        /* ── Page header ─────────── */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .page-header h1 { font-size: 22px; }
+
+        /* ── Code editor ─────────── */
+        .code-area {
+            width: 100%;
+            min-height: 500px;
+            padding: 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            tab-size: 4;
+            resize: vertical;
+        }
+
+        /* ── Log viewer ──────────── */
+        .log-box {
+            background: #000;
+            color: #0f0;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            padding: 16px;
+            border-radius: var(--radius);
+            height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* ── File list ───────────── */
+        .file-list a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            color: var(--text);
+            text-decoration: none;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+        .file-list a:hover { background: var(--bg3); }
+        .file-list .file-icon { color: var(--accent2); }
+        .file-list .file-size { margin-left: auto; color: var(--text2); font-size: 12px; }
+
+        /* ── Confirm modal ───────── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            width: 400px;
+            max-width: 90vw;
+        }
+        .modal h3 { margin-bottom: 12px; }
+        .modal p { color: var(--text2); font-size: 14px; margin-bottom: 16px; }
+        .modal .actions { justify-content: flex-end; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="{{ url_for('dashboard') }}" class="logo"><span>&#9881;</span> Bot Panel</a>
+        <div class="nav-links">
+            <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="{{ url_for('add_bot') }}" class="{% if request.endpoint == 'add_bot' %}active{% endif %}">+ Add Bot</a>
+            <a href="{{ url_for('attach_bot') }}" class="{% if request.endpoint == 'attach_bot' %}active{% endif %}">Attach Existing</a>
+            <a href="{{ url_for('logout') }}" class="btn-ghost btn-sm">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

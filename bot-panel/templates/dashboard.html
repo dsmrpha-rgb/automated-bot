@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Bot Panel{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Your Bots</h1>
+    <div style="display:flex; gap:8px;">
+        <a href="{{ url_for('attach_bot') }}" class="btn btn-ghost">Attach Existing</a>
+        <a href="{{ url_for('add_bot') }}" class="btn btn-primary">+ Deploy New Bot</a>
+    </div>
+</div>
+
+{% if not bots %}
+<div class="card" style="text-align:center; padding:48px;">
+    <p style="color:var(--text2); font-size:16px; margin-bottom:16px;">No bots registered yet.</p>
+    <a href="{{ url_for('add_bot') }}" class="btn btn-primary">Deploy Your First Bot</a>
+    <span style="color:var(--text2); margin:0 8px;">or</span>
+    <a href="{{ url_for('attach_bot') }}" class="btn btn-ghost">Attach an Existing One</a>
+</div>
+{% else %}
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Bot</th>
+                    <th>Status</th>
+                    <th>PID</th>
+                    <th>Uptime</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for bot in bots %}
+                <tr>
+                    <td><strong>{{ bot.name }}</strong><br><span style="color:var(--text2); font-size:12px;">{{ bot.service }}</span></td>
+                    <td>
+                        {% if bot.status == 'active' %}
+                        <span class="badge badge-active">Running</span>
+                        {% elif bot.status == 'inactive' %}
+                        <span class="badge badge-inactive">Stopped</span>
+                        {% else %}
+                        <span class="badge badge-other">{{ bot.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="color:var(--text2);">{{ bot.pid if bot.pid != '0' else '—' }}</td>
+                    <td style="color:var(--text2); font-size:13px;">{{ bot.since if bot.since else '—' }}</td>
+                    <td>
+                        <div class="actions">
+                            {% if bot.status != 'active' %}
+                            <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='start') }}" style="display:inline;">
+                                <button class="btn btn-green btn-sm">&#9654; Start</button>
+                            </form>
+                            {% endif %}
+                            {% if bot.status == 'active' %}
+                            <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='stop') }}" style="display:inline;">
+                                <button class="btn btn-red btn-sm">&#9632; Stop</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='restart') }}" style="display:inline;">
+                                <button class="btn btn-ghost btn-sm">&#8635; Restart</button>
+                            </form>
+                            {% endif %}
+                            <a href="{{ url_for('bot_env', name=bot.name) }}" class="btn btn-ghost btn-sm">&#9881; Config</a>
+                            <a href="{{ url_for('bot_files', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128196; Files</a>
+                            <a href="{{ url_for('bot_logs', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128220; Logs</a>
+                            <button class="btn btn-red btn-sm" onclick="confirmRemove('{{ bot.name }}')">&#128465; Remove</button>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Remove modal -->
+<div class="modal-overlay" id="removeModal">
+    <div class="modal">
+        <h3>Remove Bot</h3>
+        <p>Are you sure you want to remove <strong id="removeBotName"></strong>?</p>
+        <form method="POST" id="removeForm">
+            <div class="form-group">
+                <label><input type="checkbox" name="delete_files" value="yes"> Also delete bot files from disk</label>
+            </div>
+            <div class="actions">
+                <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-red">Remove</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function confirmRemove(name) {
+    document.getElementById('removeBotName').textContent = name;
+    document.getElementById('removeForm').action = '/bot/' + name + '/remove';
+    document.getElementById('removeModal').classList.add('active');
+}
+function closeModal() {
+    document.getElementById('removeModal').classList.remove('active');
+}
+</script>
+{% endblock %}

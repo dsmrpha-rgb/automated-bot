@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Logs — {{ name }} — Bot Panel{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>&#128220; {{ name }} — Live Logs</h1>
+    <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="clearLogs()">Clear</button>
+        <button class="btn btn-ghost btn-sm" id="scrollBtn" onclick="toggleScroll()">Auto-scroll: ON</button>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">&larr; Dashboard</a>
+    </div>
+</div>
+<div class="card" style="padding:0; overflow:hidden;">
+    <div class="log-box" id="logBox">Connecting...</div>
+</div>
+
+<script>
+const logBox = document.getElementById('logBox');
+let autoScroll = true;
+
+// Load initial logs
+fetch('/api/bot/{{ name }}/logs?lines=200')
+    .then(r => r.json())
+    .then(data => {
+        logBox.textContent = data.logs || 'No logs yet.';
+        if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
+    });
+
+// SSE stream
+const evtSource = new EventSource('/bot/{{ name }}/logs/stream');
+evtSource.onmessage = function(e) {
+    logBox.textContent += e.data + '\n';
+    if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
+};
+evtSource.onerror = function() {
+    logBox.textContent += '\n[Stream disconnected — refresh to reconnect]\n';
+};
+
+function clearLogs() { logBox.textContent = ''; }
+function toggleScroll() {
+    autoScroll = !autoScroll;
+    document.getElementById('scrollBtn').textContent = 'Auto-scroll: ' + (autoScroll ? 'ON' : 'OFF');
+}
+</script>
+{% endblock %}

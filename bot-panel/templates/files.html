@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Files — {{ name }} — Bot Panel{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>&#128196; {{ name }} — Files</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">&larr; Dashboard</a>
+</div>
+<div class="card">
+    <div class="file-list">
+        {% for file in files %}
+        <a href="{{ url_for('edit_file', name=name, filepath=file.path) }}">
+            <span class="file-icon">
+                {% if file.path.endswith('.py') %}&#128013;{% elif file.path.endswith('.json') %}&#123;&#125;{% elif file.path.endswith('.env') %}&#128272;{% else %}&#128196;{% endif %}
+            </span>
+            {{ file.path }}
+            <span class="file-size">{{ (file.size / 1024)|round(1) }} KB</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
