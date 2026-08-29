@@ -1,25 +1,108 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — Bot Panel{% endblock %}
 {% block content %}
+<style>
+    /* Button hover animations */
+    .btn {
+        transition: all 0.2s ease, transform 0.1s ease;
+    }
+    .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .btn:active {
+        transform: translateY(0) scale(0.97);
+        box-shadow: none;
+    }
+
+    /* Badge pulse for running */
+    .badge-active::before {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+
+    /* Modal animation */
+    .modal-overlay {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+    .modal-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .modal {
+        transform: scale(0.95) translateY(10px);
+        transition: transform 0.2s ease;
+    }
+    .modal-overlay.active .modal {
+        transform: scale(1) translateY(0);
+    }
+
+    /* Row hover */
+    .bot-row {
+        transition: background 0.15s ease;
+    }
+    .bot-row:hover {
+        background: var(--bg3);
+    }
+
+    /* Flash messages animation */
+    .flash {
+        animation: slideDown 0.3s ease;
+    }
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Stats bar number transitions */
+    .stat-val {
+        transition: color 0.3s ease;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Action buttons group */
+    .actions .btn {
+        transition: all 0.15s ease, transform 0.1s ease;
+    }
+    .actions .btn:hover {
+        transform: translateY(-1px);
+    }
+
+    /* Checkbox styling */
+    input[type="checkbox"] {
+        cursor: pointer;
+        accent-color: var(--accent);
+    }
+
+    /* Tooltip for compact buttons */
+    .btn[title] {
+        position: relative;
+    }
+</style>
 
 <!-- Server Stats Bar -->
 <div class="card" style="margin-bottom:20px; padding:14px 20px;">
     <div style="display:flex; gap:32px; align-items:center; flex-wrap:wrap;">
         <div style="font-size:13px; color:var(--text2);">
             <strong style="color:var(--text);">CPU</strong>
-            <span id="stat-cpu">{{ stats.cpu }}%</span>
+            <span class="stat-val" id="stat-cpu">{{ stats.cpu }}%</span>
         </div>
         <div style="font-size:13px; color:var(--text2);">
             <strong style="color:var(--text);">RAM</strong>
-            <span id="stat-mem">{{ stats.mem_used }}GB / {{ stats.mem_total }}GB ({{ stats.mem_pct }}%)</span>
+            <span class="stat-val" id="stat-mem">{{ stats.mem_used }}GB / {{ stats.mem_total }}GB ({{ stats.mem_pct }}%)</span>
         </div>
         <div style="font-size:13px; color:var(--text2);">
             <strong style="color:var(--text);">Disk</strong>
-            <span id="stat-disk">{{ stats.disk_used }}GB / {{ stats.disk_total }}GB ({{ stats.disk_pct }}%)</span>
+            <span class="stat-val" id="stat-disk">{{ stats.disk_used }}GB / {{ stats.disk_total }}GB ({{ stats.disk_pct }}%)</span>
         </div>
         <div style="font-size:13px; color:var(--text2);">
             <strong style="color:var(--text);">Uptime</strong>
-            <span id="stat-uptime">{{ stats.uptime }}</span>
+            <span class="stat-val" id="stat-uptime">{{ stats.uptime }}</span>
         </div>
         <div style="margin-left:auto;">
             <a href="{{ url_for('backups_list') }}" class="btn btn-ghost btn-sm">Backups</a>
@@ -44,18 +127,17 @@
 </div>
 {% else %}
 
-<!-- Bulk Actions -->
-<form method="POST" action="{{ url_for('bulk_action') }}" id="bulkForm">
+<!-- Bulk Actions (separate form, outside the table) -->
 <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
-    <label style="font-size:13px; color:var(--text2);">
+    <label style="font-size:13px; color:var(--text2); cursor:pointer;">
         <input type="checkbox" id="selectAll" onclick="toggleAll()"> Select All
     </label>
-    <select name="action" style="padding:5px 10px; background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+    <select id="bulkAction" style="padding:5px 10px; background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
         <option value="start">Start</option>
         <option value="stop">Stop</option>
         <option value="restart">Restart</option>
     </select>
-    <button type="submit" class="btn btn-ghost btn-sm">Apply to Selected</button>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="submitBulk()">Apply to Selected</button>
 </div>
 
 <div class="card">
@@ -73,8 +155,8 @@
             </thead>
             <tbody>
             {% for bot in bots %}
-                <tr id="row-{{ bot.name }}">
-                    <td><input type="checkbox" name="selected_bots" value="{{ bot.name }}"></td>
+                <tr class="bot-row" id="row-{{ bot.name }}">
+                    <td><input type="checkbox" class="bot-cb" value="{{ bot.name }}"></td>
                     <td>
                         <strong>{{ bot.display_name }}</strong>
                         {% if bot.display_name != bot.name %}
@@ -97,30 +179,30 @@
                         <div class="actions">
                             {% if bot.status != 'active' %}
                             <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='start') }}" style="display:inline;">
-                                <button class="btn btn-green btn-sm">&#9654; Start</button>
+                                <button class="btn btn-green btn-sm" title="Start bot">&#9654; Start</button>
                             </form>
                             {% endif %}
                             {% if bot.status == 'active' %}
                             <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='stop') }}" style="display:inline;">
-                                <button class="btn btn-red btn-sm">&#9632; Stop</button>
+                                <button class="btn btn-red btn-sm" title="Stop bot">&#9632; Stop</button>
                             </form>
                             <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='restart') }}" style="display:inline;">
-                                <button class="btn btn-ghost btn-sm">&#8635; Restart</button>
+                                <button class="btn btn-ghost btn-sm" title="Restart bot">&#8635; Restart</button>
                             </form>
                             {% endif %}
-                            <a href="{{ url_for('bot_env', name=bot.name) }}" class="btn btn-ghost btn-sm">&#9881; Config</a>
-                            <a href="{{ url_for('bot_files', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128196; Files</a>
-                            <a href="{{ url_for('bot_logs', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128220; Logs</a>
-                            <button class="btn btn-ghost btn-sm" onclick="openRename('{{ bot.name }}', '{{ bot.display_name }}')">&#9998; Rename</button>
+                            <a href="{{ url_for('bot_env', name=bot.name) }}" class="btn btn-ghost btn-sm" title="Edit .env config">&#9881; Config</a>
+                            <a href="{{ url_for('bot_files', name=bot.name) }}" class="btn btn-ghost btn-sm" title="Browse & edit files">&#128196; Files</a>
+                            <a href="{{ url_for('bot_logs', name=bot.name) }}" class="btn btn-ghost btn-sm" title="View live logs">&#128220; Logs</a>
+                            <button type="button" class="btn btn-ghost btn-sm" title="Rename bot" onclick="openRename('{{ bot.name }}', '{{ bot.display_name }}')">&#9998; Rename</button>
                             <form method="POST" action="{{ url_for('bot_backup', name=bot.name) }}" style="display:inline;">
-                                <button class="btn btn-ghost btn-sm">&#128190; Backup</button>
+                                <button class="btn btn-ghost btn-sm" title="Create backup">&#128190; Backup</button>
                             </form>
                             {% if bot.is_git %}
                             <form method="POST" action="{{ url_for('bot_git_pull', name=bot.name) }}" style="display:inline;">
-                                <button class="btn btn-ghost btn-sm" onclick="return confirm('Pull latest from git? A backup will be created first.')">&#8595; Git Pull</button>
+                                <button class="btn btn-ghost btn-sm" title="Pull latest from git" onclick="return confirm('Pull latest from git? A backup will be created first.')">&#8595; Git Pull</button>
                             </form>
                             {% endif %}
-                            <button class="btn btn-red btn-sm" onclick="confirmRemove('{{ bot.name }}', '{{ bot.display_name }}')">&#128465;</button>
+                            <button type="button" class="btn btn-red btn-sm" title="Remove bot" onclick="confirmRemove('{{ bot.name }}', '{{ bot.display_name }}')">&#128465;</button>
                         </div>
                     </td>
                 </tr>
@@ -129,7 +211,6 @@
         </table>
     </div>
 </div>
-</form>
 {% endif %}
 
 <!-- Rename modal -->
@@ -156,7 +237,7 @@
         <p>Are you sure you want to remove <strong id="removeBotName"></strong>?</p>
         <form method="POST" id="removeForm">
             <div class="form-group">
-                <label><input type="checkbox" name="delete_files" value="yes"> Also delete bot files from disk</label>
+                <label style="cursor:pointer;"><input type="checkbox" name="delete_files" value="yes"> Also delete bot files from disk</label>
             </div>
             <div class="actions">
                 <button type="button" class="btn btn-ghost" onclick="closeModal('removeModal')">Cancel</button>
@@ -166,12 +247,18 @@
     </div>
 </div>
 
+<!-- Hidden bulk form -->
+<form method="POST" action="{{ url_for('bulk_action') }}" id="bulkForm" style="display:none;">
+    <input type="hidden" name="action" id="bulkActionHidden">
+    <div id="bulkBotsContainer"></div>
+</form>
+
 <script>
 function openRename(name, display) {
     document.getElementById('renameInput').value = display;
     document.getElementById('renameForm').action = '/bot/' + name + '/rename';
     document.getElementById('renameModal').classList.add('active');
-    setTimeout(function(){ document.getElementById('renameInput').select(); }, 100);
+    setTimeout(function(){ document.getElementById('renameInput').select(); }, 150);
 }
 
 function confirmRemove(name, display) {
@@ -184,11 +271,54 @@ function closeModal(id) {
     document.getElementById(id).classList.remove('active');
 }
 
+// Close modals on backdrop click
+document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            overlay.classList.remove('active');
+        }
+    });
+});
+
+// Close modals on Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.active').forEach(function(m) {
+            m.classList.remove('active');
+        });
+    }
+});
+
 function toggleAll() {
     var checked = document.getElementById('selectAll').checked;
-    document.querySelectorAll('input[name="selected_bots"]').forEach(function(cb) {
+    document.querySelectorAll('.bot-cb').forEach(function(cb) {
         cb.checked = checked;
     });
+}
+
+function submitBulk() {
+    var selected = [];
+    document.querySelectorAll('.bot-cb:checked').forEach(function(cb) {
+        selected.push(cb.value);
+    });
+    if (selected.length === 0) {
+        alert('No bots selected');
+        return;
+    }
+    var action = document.getElementById('bulkAction').value;
+    document.getElementById('bulkActionHidden').value = action;
+
+    var container = document.getElementById('bulkBotsContainer');
+    container.innerHTML = '';
+    selected.forEach(function(name) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_bots';
+        input.value = name;
+        container.appendChild(input);
+    });
+
+    document.getElementById('bulkForm').submit();
 }
 
 // Auto-refresh status every 10 seconds
