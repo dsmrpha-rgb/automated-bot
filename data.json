@@ -1,0 +1,568 @@
+{
+  "products": {
+    "product:apocalypse_1000": {
+      "name": "Apocalypse 🔥 (1000ცალი) 20000$",
+      "price_usd": 20000.0,
+      "description": "+AAA",
+      "quantity": -1,
+      "city": "tbilisi",
+      "districts": [
+        "district:varketili",
+        "district:avchala"
+      ]
+    },
+    "product:apocalypse_500": {
+      "name": "Apocalypse 🔥 (500 ცალი) 11500$",
+      "price_usd": 11500.0,
+      "description": "+AAA",
+      "quantity": -1,
+      "city": "tbilisi",
+      "districts": [
+        "district:lilo",
+        "district:didi_digomi"
+      ]
+    },
+    "product:prada_2": {
+      "name": "Prada😈(2 ცალი) 125$",
+      "price_usd": 150.0,
+      "description": "+AAA",
+      "quantity": -1,
+      "city": "tbilisi",
+      "districts": [
+        "district:moskovis"
+      ]
+    }
+  },
+  "districts": {
+    "district:moskovis": {
+      "name": "Moskovis Gamziri",
+      "city": "tbilisi",
+      "image": "moskovisgamz.jpg"
+    },
+    "district:lilo": {
+      "name": "Lilo",
+      "city": "tbilisi",
+      "image": "lilo.jpg"
+    },
+    "district:didi_digomi": {
+      "name": "Didi Digomi",
+      "city": "tbilisi",
+      "image": "dididigomi.jpg"
+    },
+    "district:varketili": {
+      "name": "Varketili",
+      "city": "tbilisi",
+      "image": "varketili.jpg"
+    },
+    "district:avchala": {
+      "name": "Avchala",
+      "city": "tbilisi",
+      "image": "avchala.jpg"
+    }
+  },
+  "users": {
+    "8648371946": {
+      "username": "estromorphial",
+      "joined": "2026-08-28 09:56",
+      "banned": false,
+      "lang": "ka",
+      "balance": 111.0
+    },
+    "8602437589": {
+      "username": "nvadaaa",
+      "joined": "2026-08-28 09:56",
+      "banned": false
+    },
+    "7393278235": {
+      "username": "Getoutbitches",
+      "joined": "2026-08-28 12:33",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8210934225": {
+      "username": "lifeiscruel00",
+      "joined": "2026-08-28 12:42",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8911452904": {
+      "username": "",
+      "joined": "2026-08-28 12:43",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8609798220": {
+      "username": "ZoIlLuFWnY",
+      "joined": "2026-08-28 12:44",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8803596552": {
+      "username": "lew1sa",
+      "joined": "2026-08-28 12:46",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8775331579": {
+      "username": "Zodiacasulxodze",
+      "joined": "2026-08-28 12:47",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8502650820": {
+      "username": "GhostGhost91",
+      "joined": "2026-08-28 12:48",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7966920430": {
+      "username": "user12a3",
+      "joined": "2026-08-28 12:50",
+      "banned": false,
+      "lang": "ka"
+    },
+    "708091024": {
+      "username": "Tancor_66",
+      "joined": "2026-08-28 12:53",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8212899133": {
+      "username": "",
+      "joined": "2026-08-28 13:10",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5759263804": {
+      "username": "utruxune_777",
+      "joined": "2026-08-28 13:18",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7434605252": {
+      "username": "ayiktirmadan",
+      "joined": "2026-08-28 13:20",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8480810536": {
+      "username": "",
+      "joined": "2026-08-28 14:00",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5770223492": {
+      "username": "Kimera031",
+      "joined": "2026-08-28 14:21",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7523100153": {
+      "username": "",
+      "joined": "2026-08-28 15:32",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8772732819": {
+      "username": "Dedasgitireb",
+      "joined": "2026-08-28 16:04",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5363411961": {
+      "username": "Jokerr9991",
+      "joined": "2026-08-28 16:08",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8766729552": {
+      "username": "catajunglenshi",
+      "joined": "2026-08-28 19:35",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6856519260": {
+      "username": "movigeeaeeee",
+      "joined": "2026-08-28 19:38",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7403570982": {
+      "username": "ertioris",
+      "joined": "2026-08-28 19:47",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6132129866": {
+      "username": "TTT15666",
+      "joined": "2026-08-28 19:59",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7952264832": {
+      "username": "georgejokhadze333",
+      "joined": "2026-08-28 19:59",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7633356433": {
+      "username": "fabichinio",
+      "joined": "2026-08-28 20:07",
+      "banned": false,
+      "lang": "ka"
+    },
+    "1465484872": {
+      "username": "zanzarakebi",
+      "joined": "2026-08-28 20:22",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8519051329": {
+      "username": "",
+      "joined": "2026-08-28 21:12",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6250573368": {
+      "username": "K_Tavmjdomare",
+      "joined": "2026-08-28 21:22",
+      "banned": false,
+      "lang": "ka"
+    },
+    "1293881080": {
+      "username": "shizofreni1",
+      "joined": "2026-08-28 21:23",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7406861672": {
+      "username": "cristal7779",
+      "joined": "2026-08-28 21:24",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6588356559": {
+      "username": "Levski13",
+      "joined": "2026-08-28 21:27",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8206329780": {
+      "username": "gogs_gogs",
+      "joined": "2026-08-28 21:32",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7232802165": {
+      "username": "m1ndfuck7r",
+      "joined": "2026-08-28 21:45",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8799919721": {
+      "username": "",
+      "joined": "2026-08-28 23:09",
+      "banned": false,
+      "lang": "ka"
+    },
+    "564684387": {
+      "username": "mMMMmCcccCmMMMm",
+      "joined": "2026-08-29 00:32",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7364865778": {
+      "username": "",
+      "joined": "2026-08-29 00:40",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5798875704": {
+      "username": "Metamorpius",
+      "joined": "2026-08-29 01:14",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8179895274": {
+      "username": "",
+      "joined": "2026-08-29 01:33",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7889362122": {
+      "username": "UAPARATA19",
+      "joined": "2026-08-29 01:41",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8631997656": {
+      "username": "bbulbuli",
+      "joined": "2026-08-29 02:04",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6260363732": {
+      "username": "olegoleg121",
+      "joined": "2026-08-29 02:08",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8490318492": {
+      "username": "",
+      "joined": "2026-08-29 03:26",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8630431469": {
+      "username": "padinshaxi",
+      "joined": "2026-08-29 04:02",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5383535442": {
+      "username": "Lasshhaa",
+      "joined": "2026-08-29 04:11",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8838873274": {
+      "username": "sold3rrr",
+      "joined": "2026-08-29 05:20",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6109056573": {
+      "username": "moiakaaa",
+      "joined": "2026-08-29 10:15",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8737884426": {
+      "username": "RavenThornO",
+      "joined": "2026-08-29 12:47",
+      "banned": false,
+      "lang": "ka"
+    },
+    "337997667": {
+      "username": "ZZNZ123",
+      "joined": "2026-08-29 12:52",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7094594671": {
+      "username": "Mixas1505",
+      "joined": "2026-08-29 12:53",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7457377480": {
+      "username": "kakalo77777",
+      "joined": "2026-08-29 13:12",
+      "banned": false,
+      "lang": "ka"
+    },
+    "7071163899": {
+      "username": "Uawzvga",
+      "joined": "2026-08-29 13:13",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5507993998": {
+      "username": "TheeheartisAtemplee",
+      "joined": "2026-08-29 13:18",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5707646376": {
+      "username": "Sokerae",
+      "joined": "2026-08-29 14:11",
+      "banned": false,
+      "lang": "ka"
+    },
+    "1493792455": {
+      "username": "AuRa_Feel",
+      "joined": "2026-08-29 14:11",
+      "banned": false,
+      "lang": "ka"
+    },
+    "1702817867": {
+      "username": "Omeome15",
+      "joined": "2026-08-29 14:14",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6875777260": {
+      "username": "tazz111111",
+      "joined": "2026-08-29 14:30",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8669564486": {
+      "username": "Lotta8888",
+      "joined": "2026-08-29 14:32",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6247013259": {
+      "username": "vallvall22",
+      "joined": "2026-08-29 14:44",
+      "banned": false,
+      "lang": "ka"
+    },
+    "627026354": {
+      "username": "hhfjjsfjsjfjf",
+      "joined": "2026-08-29 15:47",
+      "banned": false,
+      "lang": "ka"
+    },
+    "6521228420": {
+      "username": "derski123444",
+      "joined": "2026-08-29 15:47",
+      "banned": false,
+      "lang": "ka"
+    },
+    "8756919855": {
+      "username": "",
+      "joined": "2026-08-29 16:14",
+      "banned": false,
+      "lang": "ka"
+    },
+    "2137244064": {
+      "username": "chagitare44",
+      "joined": "2026-08-29 16:36",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5472338981": {
+      "username": "SmokingKills15",
+      "joined": "2026-08-29 16:36",
+      "banned": false,
+      "lang": "ka"
+    },
+    "5448125435": {
+      "username": "mehrods",
+      "joined": "2026-08-29 17:07",
+      "banned": false,
+      "lang": "ka",
+      "balance": 0.0
+    },
+    "7146683700": {
+      "username": "vaxo_gorgasali",
+      "joined": "2026-08-29 17:12",
+      "banned": false,
+      "lang": "ka",
+      "balance": 0.0
+    },
+    "5031435493": {
+      "username": "rezus2323",
+      "joined": "2026-08-29 17:39",
+      "banned": false,
+      "lang": "ka",
+      "balance": 0.0
+    }
+  },
+  "announcements_scheduled": [
+    {
+      "id": 1,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-28 16:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 2,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-28 19:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 3,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-28 22:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 4,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-29 01:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 5,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-29 04:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 6,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-29 07:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 7,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-29 10:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 8,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-29 13:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 9,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-29 16:13",
+      "recurring": "3h",
+      "sent": true
+    },
+    {
+      "id": 10,
+      "text": "ვეძებთ კურიერებს 🦶 ყველა ქალაქში. მხოლოდ დეპოზიტით !!!\nმინიმალური დეპოზიტი 500 Gel.\n\nანაზღაურება: \n1 ცალი სუნამოს შეფუთვა, მიტანა 35 Gel.\n2 ცალი სუნამოს შეფუთვა, მიტანა 60 Gel.\n3 ცალი სუნამოს შეფუთვა, მიტანა 70 Gel.\n4 ცალი სუნამოს შეფუთვა, მიტანა 80 Gel.\n\nდამატებით ინფორმაციისთვის მომწერეთ:\nAdmin: @Mamahaduna\nსესიონის ჯგუფში მოსახვედრად რომელიც ღიაა 24/7 ზე მომწერეთ აქ.\n\nSession ID: 05a08265a2974187a3ded92e13030a187f46cb4e34e4666be922688684a124ce28",
+      "photo": "AgACAgIAAxkBAAIBN2qRUVTIPvgHvVzxWaAlzYiPBpD9AAIoHGsbnPSISE_S2RC8Me6MAQADAgADeQADPQQ",
+      "run_at": "2026-08-29 19:13",
+      "recurring": "3h",
+      "sent": false
+    }
+  ],
+  "stats": {
+    "total_orders": 0,
+    "total_revenue_usd": 0.0
+  },
+  "deposit_txs": {
+    "09eb65ff8a428b066264af0e3d547f13795b83814f03a66963dab3fbfff84202": {
+      "txid": "09eb65ff8a428b066264af0e3d547f13795b83814f03a66963dab3fbfff84202",
+      "coin": "BTC",
+      "amount": 0.00067547,
+      "address": "bc1qkwn8t7ueptlg2t0duflmd2huqa0q34638cpc2u",
+      "confirmations": 3637,
+      "status": "confirmed"
+    },
+    "36d694b76e575f3b34bdf3c9760cd1a3b7672873aa94d6fc5a5b232a559866e1": {
+      "txid": "36d694b76e575f3b34bdf3c9760cd1a3b7672873aa94d6fc5a5b232a559866e1",
+      "coin": "BTC",
+      "amount": 0.00264079,
+      "address": "bc1qkwn8t7ueptlg2t0duflmd2huqa0q34638cpc2u",
+      "confirmations": 12808,
+      "status": "confirmed"
+    }
+  }
+}
