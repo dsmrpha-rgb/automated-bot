@@ -4,7 +4,7 @@ set -e
 # ─────────────────────────────────────────────────────────────
 #  Mamahadesa Bot — One-line VPS deploy script
 #  Usage:
-#    sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/dsmrpha-rgb/automated-bot/master/scripts/deploy.sh)"
+#    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/dsmrpha-rgb/automated-bot/master/scripts/deploy.sh)"
 # ─────────────────────────────────────────────────────────────
 
 REPO="https://github.com/dsmrpha-rgb/automated-bot.git"

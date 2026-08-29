@@ -8,13 +8,18 @@
 <div class="card" style="max-width:600px;">
     <form method="POST">
         <div class="form-group">
-            <label>Bot Name (used as folder name and service ID)</label>
+            <label>Internal Name (folder &amp; service ID, no spaces)</label>
             <input type="text" name="name" placeholder="e.g. shop-bot-2" required pattern="[a-zA-Z0-9_-]+">
+        </div>
+        <div class="form-group">
+            <label>Display Name (shown in dashboard, can be anything)</label>
+            <input type="text" name="display_name" placeholder="e.g. My Shop Bot #2">
         </div>
         <div class="form-group">
             <label>Git Repository URL</label>
             <input type="text" name="repo" placeholder="https://github.com/user/repo.git" required>
         </div>
+        <hr style="border-color:var(--border); margin:20px 0;">
         <div class="form-group">
             <label>Bot Tokens (comma-separated)</label>
             <input type="text" name="bot_tokens" placeholder="123456:ABC..." required>
@@ -23,7 +28,19 @@
             <label>Admin IDs (comma-separated)</label>
             <input type="text" name="admin_ids" placeholder="123456789">
         </div>
-        <button type="submit" class="btn btn-primary">&#128640; Clone & Deploy</button>
+        <div class="form-group">
+            <label>BTC Wallet (optional)</label>
+            <input type="text" name="btc_wallet" placeholder="bc1q...">
+        </div>
+        <div class="form-group">
+            <label>LTC Wallet (optional)</label>
+            <input type="text" name="ltc_wallet" placeholder="ltc1...">
+        </div>
+        <div class="form-group">
+            <label>USDT Wallet (optional)</label>
+            <input type="text" name="usdt_wallet" placeholder="0x...">
+        </div>
+        <button type="submit" class="btn btn-primary">&#128640; Clone &amp; Deploy</button>
     </form>
 </div>
 {% endblock %}

@@ -8,6 +8,9 @@ import json
 import subprocess
 import secrets
 import shutil
+import time
+import psutil
+from datetime import datetime, timezone
 from pathlib import Path
 from functools import wraps
 
@@ -24,12 +27,15 @@ BOTS_BASE_DIR = Path(os.environ.get("BOTS_DIR", "/opt"))
 PANEL_USER = os.environ.get("PANEL_USER", "admin")
 PANEL_PASS = os.environ.get("PANEL_PASS", "changeme")
 PANEL_CONFIG = Path("/etc/bot-panel/bots.json")
+BACKUP_DIR = Path("/var/backups/bot-panel")
 
-EDITABLE_EXTENSIONS = {".py", ".json", ".txt", ".env", ".md", ".cfg", ".ini", ".yml", ".yaml", ".toml"}
+EDITABLE_EXTENSIONS = {
+    ".py", ".json", ".txt", ".env", ".md", ".cfg",
+    ".ini", ".yml", ".yaml", ".toml", ".html", ".css", ".js",
+}
 
 
 def load_bots_config() -> dict:
-    """Load registered bots from config file."""
     if PANEL_CONFIG.exists():
         return json.loads(PANEL_CONFIG.read_text())
     return {"bots": {}}
@@ -69,7 +75,6 @@ def logout():
 
 # ── Helpers ─────────────────────────────────────────────────
 def systemctl(action: str, service: str) -> tuple[int, str]:
-    """Run a systemctl command, return (returncode, output)."""
     result = subprocess.run(
         ["systemctl", action, service],
         capture_output=True, text=True, timeout=15
@@ -78,22 +83,17 @@ def systemctl(action: str, service: str) -> tuple[int, str]:
 
 
 def get_service_status(service: str) -> dict:
-    """Get systemd service status as a dict."""
     code, output = systemctl("is-active", service)
     is_active = output.strip()
 
-    code2, output2 = subprocess.run(
+    result = subprocess.run(
         ["systemctl", "show", service,
          "--property=ActiveEnterTimestamp,MainPID,MemoryCurrent"],
         capture_output=True, text=True, timeout=10
-    ).returncode, subprocess.run(
-        ["systemctl", "show", service,
-         "--property=ActiveEnterTimestamp,MainPID,MemoryCurrent"],
-        capture_output=True, text=True, timeout=10
-    ).stdout
+    )
 
     props = {}
-    for line in output2.strip().split("\n"):
+    for line in result.stdout.strip().split("\n"):
         if "=" in line:
             k, v = line.split("=", 1)
             props[k] = v
@@ -107,12 +107,10 @@ def get_service_status(service: str) -> dict:
 
 
 def get_bot_files(bot_dir: Path) -> list[dict]:
-    """List editable files in a bot directory."""
     files = []
     for f in sorted(bot_dir.rglob("*")):
         if f.is_file() and f.suffix in EDITABLE_EXTENSIONS:
             rel = f.relative_to(bot_dir)
-            # Skip venv and __pycache__
             parts = rel.parts
             if any(p in ("venv", "__pycache__", ".git", "node_modules") for p in parts):
                 continue
@@ -122,6 +120,38 @@ def get_bot_files(bot_dir: Path) -> list[dict]:
                 "size": f.stat().st_size,
             })
     return files
+
+
+def get_server_stats() -> dict:
+    """System resource usage."""
+    cpu = psutil.cpu_percent(interval=0.5)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+    uptime_sec = time.time() - psutil.boot_time()
+    days = int(uptime_sec // 86400)
+    hours = int((uptime_sec % 86400) // 3600)
+    return {
+        "cpu": cpu,
+        "mem_used": round(mem.used / (1024**3), 1),
+        "mem_total": round(mem.total / (1024**3), 1),
+        "mem_pct": mem.percent,
+        "disk_used": round(disk.used / (1024**3), 1),
+        "disk_total": round(disk.total / (1024**3), 1),
+        "disk_pct": disk.percent,
+        "uptime": f"{days}d {hours}h",
+    }
+
+
+def backup_bot(bot_dir: Path, name: str) -> str:
+    """Create a timestamped backup of a bot directory. Returns backup path."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = BACKUP_DIR / f"{name}-{ts}"
+    shutil.copytree(
+        bot_dir, backup_path,
+        ignore=shutil.ignore_patterns("venv", "__pycache__", ".git")
+    )
+    return str(backup_path)
 
 
 # ── Routes ──────────────────────────────────────────────────
@@ -134,18 +164,27 @@ def dashboard():
         service = info.get("service", name)
         bot_dir = Path(info.get("dir", str(BOTS_BASE_DIR / name)))
         status = get_service_status(service)
+
+        # Check if it's a git repo
+        is_git = (bot_dir / ".git").exists()
+
         bots.append({
             "name": name,
+            "display_name": info.get("display_name", name),
             "service": service,
             "dir": str(bot_dir),
             "status": status["status"],
             "pid": status["pid"],
             "since": status["since"],
             "memory": status["memory"],
+            "is_git": is_git,
         })
-    return render_template("dashboard.html", bots=bots)
+
+    stats = get_server_stats()
+    return render_template("dashboard.html", bots=bots, stats=stats)
 
 
+# ── Bot actions ─────────────────────────────────────────────
 @app.route("/bot/<name>/action/<action>", methods=["POST"])
 @login_required
 def bot_action(name, action):
@@ -162,12 +201,37 @@ def bot_action(name, action):
 
     code, output = systemctl(action, service)
     if code == 0:
-        flash(f"Bot '{name}' — {action} OK", "success")
+        flash(f"Bot '{bot.get('display_name', name)}' — {action} OK", "success")
     else:
-        flash(f"Bot '{name}' — {action} failed: {output}", "error")
+        flash(f"Failed: {output}", "error")
     return redirect(url_for("dashboard"))
 
 
+# ── Bulk actions ────────────────────────────────────────────
+@app.route("/bulk-action", methods=["POST"])
+@login_required
+def bulk_action():
+    action = request.form.get("action")
+    selected = request.form.getlist("selected_bots")
+    if not selected:
+        flash("No bots selected", "error")
+        return redirect(url_for("dashboard"))
+
+    config = load_bots_config()
+    ok_count = 0
+    for name in selected:
+        bot = config["bots"].get(name)
+        if bot:
+            service = bot.get("service", name)
+            code, _ = systemctl(action, service)
+            if code == 0:
+                ok_count += 1
+
+    flash(f"{action.title()} — {ok_count}/{len(selected)} bots OK", "success")
+    return redirect(url_for("dashboard"))
+
+
+# ── .env editor ─────────────────────────────────────────────
 @app.route("/bot/<name>/env", methods=["GET", "POST"])
 @login_required
 def bot_env(name):
@@ -182,13 +246,15 @@ def bot_env(name):
     if request.method == "POST":
         content = request.form.get("content", "")
         env_path.write_text(content)
-        flash("Saved .env — restart the bot to apply changes.", "success")
+        flash("Saved .env — restart the bot to apply.", "success")
         return redirect(url_for("bot_env", name=name))
 
     content = env_path.read_text() if env_path.exists() else ""
-    return render_template("env_editor.html", name=name, content=content)
+    display = bot.get("display_name", name)
+    return render_template("env_editor.html", name=name, display_name=display, content=content)
 
 
+# ── File browser + editor ──────────────────────────────────
 @app.route("/bot/<name>/files")
 @login_required
 def bot_files(name):
@@ -200,7 +266,8 @@ def bot_files(name):
 
     bot_dir = Path(bot["dir"])
     files = get_bot_files(bot_dir)
-    return render_template("files.html", name=name, files=files)
+    display = bot.get("display_name", name)
+    return render_template("files.html", name=name, display_name=display, files=files)
 
 
 @app.route("/bot/<name>/edit/<path:filepath>", methods=["GET", "POST"])
@@ -215,7 +282,7 @@ def edit_file(name, filepath):
     bot_dir = Path(bot["dir"])
     file_path = bot_dir / filepath
 
-    # Security: ensure path stays within bot_dir
+    # Security: path must stay within bot_dir
     try:
         file_path.resolve().relative_to(bot_dir.resolve())
     except ValueError:
@@ -229,10 +296,10 @@ def edit_file(name, filepath):
         return redirect(url_for("edit_file", name=name, filepath=filepath))
 
     content = file_path.read_text() if file_path.exists() else ""
-    return render_template("code_editor.html", name=name,
-                           filepath=filepath, content=content)
+    return render_template("code_editor.html", name=name, filepath=filepath, content=content)
 
 
+# ── Logs ────────────────────────────────────────────────────
 @app.route("/bot/<name>/logs")
 @login_required
 def bot_logs(name):
@@ -242,7 +309,8 @@ def bot_logs(name):
         flash(f"Bot '{name}' not found", "error")
         return redirect(url_for("dashboard"))
     service = bot.get("service", name)
-    return render_template("logs.html", name=name, service=service)
+    display = bot.get("display_name", name)
+    return render_template("logs.html", name=name, display_name=display, service=service)
 
 
 @app.route("/api/bot/<name>/logs")
@@ -254,7 +322,7 @@ def api_bot_logs(name):
         return jsonify({"error": "not found"}), 404
 
     service = bot.get("service", name)
-    lines = request.args.get("lines", "100")
+    lines = request.args.get("lines", "200")
     result = subprocess.run(
         ["journalctl", "-u", service, "-n", lines, "--no-pager", "--output=short-iso"],
         capture_output=True, text=True, timeout=10
@@ -286,15 +354,103 @@ def stream_logs(name):
     return Response(generate(), mimetype="text/event-stream")
 
 
-# ── Add / Remove bots ──────────────────────────────────────
+# ── Rename ──────────────────────────────────────────────────
+@app.route("/bot/<name>/rename", methods=["POST"])
+@login_required
+def rename_bot(name):
+    config = load_bots_config()
+    bot = config["bots"].get(name)
+    if not bot:
+        flash(f"Bot '{name}' not found", "error")
+        return redirect(url_for("dashboard"))
+
+    new_display = request.form.get("new_name", "").strip()
+    if not new_display:
+        flash("Name cannot be empty", "error")
+        return redirect(url_for("dashboard"))
+
+    bot["display_name"] = new_display
+    save_bots_config(config)
+    flash(f"Renamed to '{new_display}'", "success")
+    return redirect(url_for("dashboard"))
+
+
+# ── Backup ──────────────────────────────────────────────────
+@app.route("/bot/<name>/backup", methods=["POST"])
+@login_required
+def bot_backup(name):
+    config = load_bots_config()
+    bot = config["bots"].get(name)
+    if not bot:
+        flash(f"Bot '{name}' not found", "error")
+        return redirect(url_for("dashboard"))
+
+    try:
+        path = backup_bot(Path(bot["dir"]), name)
+        flash(f"Backup created: {path}", "success")
+    except Exception as e:
+        flash(f"Backup failed: {e}", "error")
+    return redirect(url_for("dashboard"))
+
+
+# ── Git pull (update from repo) ─────────────────────────────
+@app.route("/bot/<name>/git-pull", methods=["POST"])
+@login_required
+def bot_git_pull(name):
+    config = load_bots_config()
+    bot = config["bots"].get(name)
+    if not bot:
+        flash(f"Bot '{name}' not found", "error")
+        return redirect(url_for("dashboard"))
+
+    bot_dir = Path(bot["dir"])
+    if not (bot_dir / ".git").exists():
+        flash("Not a git repository", "error")
+        return redirect(url_for("dashboard"))
+
+    # Backup first
+    try:
+        bk = backup_bot(bot_dir, name)
+    except Exception:
+        bk = None
+
+    # Pull
+    result = subprocess.run(
+        ["git", "-C", str(bot_dir), "pull", "--force"],
+        capture_output=True, text=True, timeout=60
+    )
+
+    if result.returncode == 0:
+        # Reinstall deps
+        venv_pip = bot_dir / "venv" / "bin" / "pip"
+        req = bot_dir / "requirements.txt"
+        if venv_pip.exists() and req.exists():
+            subprocess.run([str(venv_pip), "install", "-r", str(req), "-q"], timeout=120)
+
+        msg = f"Updated from git. "
+        if bk:
+            msg += f"Backup at {bk}. "
+        msg += "Restart the bot to apply."
+        flash(msg, "success")
+    else:
+        flash(f"Git pull failed: {result.stderr}", "error")
+
+    return redirect(url_for("dashboard"))
+
+
+# ── Add new bot ─────────────────────────────────────────────
 @app.route("/add-bot", methods=["GET", "POST"])
 @login_required
 def add_bot():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
+        display_name = request.form.get("display_name", "").strip() or name
         repo = request.form.get("repo", "").strip()
         bot_tokens = request.form.get("bot_tokens", "").strip()
         admin_ids = request.form.get("admin_ids", "").strip()
+        btc = request.form.get("btc_wallet", "").strip()
+        ltc = request.form.get("ltc_wallet", "").strip()
+        usdt = request.form.get("usdt_wallet", "").strip()
 
         if not name:
             flash("Bot name is required", "error")
@@ -315,8 +471,7 @@ def add_bot():
 
         # Setup venv
         if (bot_dir / "requirements.txt").exists():
-            subprocess.run(["python3", "-m", "venv", str(bot_dir / "venv")],
-                           timeout=30)
+            subprocess.run(["python3", "-m", "venv", str(bot_dir / "venv")], timeout=30)
             subprocess.run(
                 [str(bot_dir / "venv/bin/pip"), "install", "-r",
                  str(bot_dir / "requirements.txt"), "-q"],
@@ -325,15 +480,21 @@ def add_bot():
 
         # Write .env
         if bot_tokens:
-            env_content = f"BOT_TOKENS={bot_tokens}\n"
+            env_lines = [f"BOT_TOKENS={bot_tokens}"]
             if admin_ids:
-                env_content += f"ADMIN_IDS={admin_ids}\n"
-            (bot_dir / ".env").write_text(env_content)
+                env_lines.append(f"ADMIN_IDS={admin_ids}")
+            if btc:
+                env_lines.append(f"BTC_WALLET={btc}")
+            if ltc:
+                env_lines.append(f"LTC_WALLET={ltc}")
+            if usdt:
+                env_lines.append(f"USDT_WALLET={usdt}")
+            (bot_dir / ".env").write_text("\n".join(env_lines) + "\n")
             os.chmod(bot_dir / ".env", 0o600)
 
         # Create systemd service
         service_content = f"""[Unit]
-Description=Telegram Bot - {name}
+Description=Telegram Bot - {display_name}
 After=network.target
 
 [Service]
@@ -352,21 +513,23 @@ WantedBy=multi-user.target
         subprocess.run(["systemctl", "daemon-reload"], timeout=10)
         subprocess.run(["systemctl", "enable", service_name], timeout=10)
 
-        # Register in panel config
+        # Register
         config = load_bots_config()
         config["bots"][name] = {
             "dir": str(bot_dir),
             "service": service_name,
+            "display_name": display_name,
             "repo": repo,
         }
         save_bots_config(config)
 
-        flash(f"Bot '{name}' added! Start it from the dashboard.", "success")
+        flash(f"Bot '{display_name}' deployed! Start it from the dashboard.", "success")
         return redirect(url_for("dashboard"))
 
     return render_template("add_bot.html")
 
 
+# ── Remove bot ──────────────────────────────────────────────
 @app.route("/bot/<name>/remove", methods=["POST"])
 @login_required
 def remove_bot(name):
@@ -377,8 +540,6 @@ def remove_bot(name):
         return redirect(url_for("dashboard"))
 
     service = bot.get("service", name)
-
-    # Stop and disable service
     systemctl("stop", service)
     systemctl("disable", service)
     service_file = Path(f"/etc/systemd/system/{service}.service")
@@ -386,17 +547,14 @@ def remove_bot(name):
         service_file.unlink()
     subprocess.run(["systemctl", "daemon-reload"], timeout=10)
 
-    # Optionally remove files
     if request.form.get("delete_files") == "yes":
         bot_dir = Path(bot["dir"])
         if bot_dir.exists():
             shutil.rmtree(bot_dir)
 
-    # Remove from config
     del config["bots"][name]
     save_bots_config(config)
-
-    flash(f"Bot '{name}' removed.", "success")
+    flash(f"Bot '{bot.get('display_name', name)}' removed.", "success")
     return redirect(url_for("dashboard"))
 
 
@@ -404,9 +562,9 @@ def remove_bot(name):
 @app.route("/attach-bot", methods=["GET", "POST"])
 @login_required
 def attach_bot():
-    """Register an already-deployed bot (existing dir + systemd service)."""
     if request.method == "POST":
         name = request.form.get("name", "").strip()
+        display_name = request.form.get("display_name", "").strip() or name
         directory = request.form.get("directory", "").strip()
         service = request.form.get("service", "").strip()
 
@@ -422,13 +580,62 @@ def attach_bot():
         config["bots"][name] = {
             "dir": directory,
             "service": service,
+            "display_name": display_name,
         }
         save_bots_config(config)
-
-        flash(f"Bot '{name}' attached!", "success")
+        flash(f"Bot '{display_name}' attached!", "success")
         return redirect(url_for("dashboard"))
 
     return render_template("attach_bot.html")
+
+
+# ── API: status for auto-refresh ────────────────────────────
+@app.route("/api/status")
+@login_required
+def api_status():
+    config = load_bots_config()
+    result = {}
+    for name, info in config.get("bots", {}).items():
+        service = info.get("service", name)
+        status = get_service_status(service)
+        result[name] = status
+    return jsonify(result)
+
+
+@app.route("/api/server-stats")
+@login_required
+def api_server_stats():
+    return jsonify(get_server_stats())
+
+
+# ── Backups list ────────────────────────────────────────────
+@app.route("/backups")
+@login_required
+def backups_list():
+    backups = []
+    if BACKUP_DIR.exists():
+        for d in sorted(BACKUP_DIR.iterdir(), reverse=True):
+            if d.is_dir():
+                size = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+                backups.append({
+                    "name": d.name,
+                    "path": str(d),
+                    "size": round(size / (1024 * 1024), 1),
+                    "created": datetime.fromtimestamp(d.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+                })
+    return render_template("backups.html", backups=backups)
+
+
+@app.route("/backup/<name>/delete", methods=["POST"])
+@login_required
+def delete_backup(name):
+    path = BACKUP_DIR / name
+    if path.exists() and path.is_dir():
+        shutil.rmtree(path)
+        flash(f"Backup '{name}' deleted.", "success")
+    else:
+        flash("Backup not found", "error")
+    return redirect(url_for("backups_list"))
 
 
 if __name__ == "__main__":

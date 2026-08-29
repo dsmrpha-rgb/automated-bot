@@ -4,10 +4,11 @@ set -e
 # ─────────────────────────────────────────────────────────────
 #  Bot Panel — One-line VPS deploy script
 #  Usage:
-#    sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/dsmrpha-rgb/automated-bot/master/bot-panel/deploy-panel.sh)"
+#    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/dsmrpha-rgb/automated-bot/master/bot-panel/deploy-panel.sh)"
 # ─────────────────────────────────────────────────────────────
 
 REPO="https://github.com/dsmrpha-rgb/automated-bot.git"
+CLONE_DIR="/opt/automated-bot-repo"
 PANEL_DIR="/opt/bot-panel"
 SERVICE_NAME="bot-panel"
 PYTHON="python3"
@@ -37,22 +38,28 @@ elif command -v yum >/dev/null 2>&1; then
 fi
 ok "System packages ready."
 
-# ── Clone / update panel ────────────────────────────────────
-if [ -d "$PANEL_DIR/.git" ]; then
-    info "Updating existing panel..."
-    cd "$PANEL_DIR"
+# ── Clone or pull the repo ──────────────────────────────────
+if [ -d "$CLONE_DIR/.git" ]; then
+    info "Pulling latest from git..."
+    cd "$CLONE_DIR"
     git fetch --all
     git reset --hard origin/master
 else
-    info "Cloning panel..."
-    # Clone the full repo, then keep only the panel dir
-    TMP_DIR=$(mktemp -d)
-    git clone "$REPO" "$TMP_DIR"
-    rm -rf "$PANEL_DIR"
-    mv "$TMP_DIR/bot-panel" "$PANEL_DIR"
-    rm -rf "$TMP_DIR"
+    info "Cloning repository..."
+    git clone "$REPO" "$CLONE_DIR"
 fi
-ok "Panel files ready at $PANEL_DIR."
+ok "Repo up to date."
+
+# ── Copy panel files (preserve .env and venv) ───────────────
+info "Syncing panel files..."
+mkdir -p "$PANEL_DIR/templates"
+cp "$CLONE_DIR/bot-panel/app.py" "$PANEL_DIR/app.py"
+cp "$CLONE_DIR/bot-panel/requirements.txt" "$PANEL_DIR/requirements.txt"
+cp "$CLONE_DIR"/bot-panel/templates/*.html "$PANEL_DIR/templates/"
+if [ -d "$CLONE_DIR/bot-panel/static" ]; then
+    cp -r "$CLONE_DIR/bot-panel/static" "$PANEL_DIR/"
+fi
+ok "Panel files synced."
 
 cd "$PANEL_DIR"
 
@@ -78,8 +85,7 @@ else
     P_USER=${P_USER:-admin}
 
     printf "Choose admin password: "
-    read -r -s P_PASS
-    echo ""
+    read -r P_PASS
 
     if [ -z "$P_PASS" ]; then
         P_PASS=$(openssl rand -hex 12)
@@ -104,8 +110,9 @@ fi
 # Read port from .env
 P_PORT=$(grep -oP 'PANEL_PORT=\K.*' "$PANEL_DIR/.env" 2>/dev/null || echo "8080")
 
-# ── Create config dir ───────────────────────────────────────
+# ── Config + backup dirs ───────────────────────────────────
 mkdir -p /etc/bot-panel
+mkdir -p /var/backups/bot-panel
 
 # ── Systemd service ─────────────────────────────────────────
 info "Creating systemd service..."
@@ -137,14 +144,12 @@ ok "Panel service started."
 info "Scanning for existing bot services..."
 FOUND=0
 
-# Check for automated-bot (from our deploy.sh)
+if [ ! -f /etc/bot-panel/bots.json ]; then
+    echo '{"bots":{}}' > /etc/bot-panel/bots.json
+fi
+
+# Check for automated-bot (from deploy.sh)
 if [ -f /etc/systemd/system/automated-bot.service ] && [ -d /opt/automated-bot ]; then
-    # Auto-register it
-    mkdir -p /etc/bot-panel
-    if [ ! -f /etc/bot-panel/bots.json ]; then
-        echo '{"bots":{}}' > /etc/bot-panel/bots.json
-    fi
-    # Use python to safely add the entry
     $PYTHON -c "
 import json
 p = '/etc/bot-panel/bots.json'
@@ -152,7 +157,8 @@ c = json.load(open(p))
 if 'automated-bot' not in c.get('bots', {}):
     c.setdefault('bots', {})['automated-bot'] = {
         'dir': '/opt/automated-bot',
-        'service': 'automated-bot'
+        'service': 'automated-bot',
+        'display_name': 'Automated Bot'
     }
     json.dump(c, open(p, 'w'), indent=2)
     print('  -> Registered: automated-bot')
@@ -162,8 +168,33 @@ else:
     FOUND=1
 fi
 
+# Scan for any bot-* services
+for svc_file in /etc/systemd/system/bot-*.service; do
+    [ -f "$svc_file" ] || continue
+    svc_name=$(basename "$svc_file" .service)
+    bot_name=${svc_name#bot-}
+    bot_dir=$(grep -oP 'WorkingDirectory=\K.*' "$svc_file" 2>/dev/null || true)
+    if [ -n "$bot_dir" ] && [ -d "$bot_dir" ]; then
+        $PYTHON -c "
+import json
+p = '/etc/bot-panel/bots.json'
+c = json.load(open(p))
+name = '$bot_name'
+if name not in c.get('bots', {}):
+    c.setdefault('bots', {})[name] = {
+        'dir': '$bot_dir',
+        'service': '$svc_name',
+        'display_name': name
+    }
+    json.dump(c, open(p, 'w'), indent=2)
+    print('  -> Registered: ' + name)
+"
+        FOUND=1
+    fi
+done
+
 if [ "$FOUND" -eq 0 ]; then
-    info "No existing bots found. You can add them from the dashboard."
+    info "No existing bots found. Add them from the dashboard."
 fi
 
 # ── Get server IP ───────────────────────────────────────────
@@ -183,6 +214,8 @@ echo "  Status:   systemctl status $SERVICE_NAME"
 echo "  Logs:     journalctl -u $SERVICE_NAME -f"
 echo "  Restart:  systemctl restart $SERVICE_NAME"
 echo "  Config:   nano $PANEL_DIR/.env"
+echo ""
+echo "  To update the panel later, just run this script again."
 echo ""
 warn "For production: set up a reverse proxy (nginx) with HTTPS!"
 echo ""
