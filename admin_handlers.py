@@ -31,6 +31,7 @@ from admin_states import (
     BanUserFSM,
     BroadcastFSM,
     EditProductFSM,
+    PrivateDmFSM,
     ScheduledAnnouncementFSM,
     SetBalanceFSM,
 )
@@ -538,6 +539,148 @@ async def broadcast_execute(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await call.message.edit_text(
         f"✅ განცხადება გაგზავნილია!\n\n"
+        f"📨 გაგზავნილი: {sent}\n"
+        f"❌ ვერ გაიგზავნა: {failed}\n"
+        f"👥 სულ: {len(user_ids)}",
+        reply_markup=akb.admin_back_kb("admin:menu"),
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  PRIVATE DM  (send message to specific user IDs)
+# ══════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin:dm")
+async def dm_start_cb(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await call.message.edit_text(
+        "✉ შეიყვანეთ მომხმარებლის ID-ები (მძიმით გამოყოფილი):\n\n"
+        "მაგ: 123456789, 987654321",
+        reply_markup=akb.admin_back_kb("admin:menu"),
+    )
+    await state.set_state(PrivateDmFSM.waiting_user_ids)
+    await call.answer()
+
+
+@router.message(Command("dm"))
+async def dm_start_cmd(message: Message, state: FSMContext):
+    if not _is_admin(message.from_user.id):
+        return
+    await message.answer(
+        "✉ შეიყვანეთ მომხმარებლის ID-ები (მძიმით გამოყოფილი):\n\n"
+        "მაგ: 123456789, 987654321",
+        reply_markup=akb.admin_back_kb("admin:menu"),
+    )
+    await state.set_state(PrivateDmFSM.waiting_user_ids)
+
+
+@router.message(PrivateDmFSM.waiting_user_ids, F.text)
+async def dm_ids_received(message: Message, state: FSMContext):
+    raw = message.text.replace(" ", "")
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    valid_ids = []
+    for p in parts:
+        if p.lstrip("-").isdigit():
+            valid_ids.append(int(p))
+    if not valid_ids:
+        await message.answer(
+            "❌ ვერცერთი ID ვერ მოიძებნა. სცადეთ ხელახლა:\n"
+            "მაგ: 123456789, 987654321",
+        )
+        return
+    await state.update_data(dm_user_ids=valid_ids)
+    await message.answer(
+        f"✅ {len(valid_ids)} მომხმარებელი არჩეულია.\n\n"
+        "ახლა ჩაწერეთ შეტყობინების ტექსტი:",
+        reply_markup=akb.admin_back_kb("admin:menu"),
+    )
+    await state.set_state(PrivateDmFSM.waiting_message)
+
+
+@router.message(PrivateDmFSM.waiting_message, F.text)
+async def dm_text_received(message: Message, state: FSMContext):
+    await state.update_data(dm_text=message.text)
+    await message.answer(
+        "გსურთ ფოტოს დამატება?",
+        reply_markup=akb.dm_photo_kb(),
+    )
+    await state.set_state(PrivateDmFSM.waiting_photo)
+
+
+@router.callback_query(F.data == "adm_dm_photo", PrivateDmFSM.waiting_photo)
+async def dm_ask_photo(call: CallbackQuery, state: FSMContext):
+    await call.message.edit_text(
+        "📷 გამოაგზავნეთ ფოტო:",
+        reply_markup=akb.admin_back_kb("admin:menu"),
+    )
+    await call.answer()
+
+
+@router.message(PrivateDmFSM.waiting_photo, F.photo)
+async def dm_photo_received(message: Message, state: FSMContext):
+    photo = message.photo[-1]
+    await state.update_data(dm_photo_id=photo.file_id)
+    data = await state.get_data()
+    ids = data["dm_user_ids"]
+    await message.answer(
+        f"✉ პირადი შეტყობინების წინასწარი ხედვა:\n\n"
+        f"{data['dm_text']}\n\n"
+        f"📷 ფოტო: დამატებულია\n"
+        f"👥 მიმღებები: {len(ids)} მომხმარებელი\n\n"
+        f"გსურთ გაგზავნა?",
+        reply_markup=akb.dm_confirm_kb(),
+    )
+    await state.set_state(PrivateDmFSM.waiting_confirm)
+
+
+@router.callback_query(F.data == "adm_dm_no_photo", PrivateDmFSM.waiting_photo)
+async def dm_no_photo(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    ids = data["dm_user_ids"]
+    await call.message.edit_text(
+        f"✉ პირადი შეტყობინების წინასწარი ხედვა:\n\n"
+        f"{data['dm_text']}\n\n"
+        f"👥 მიმღებები: {len(ids)} მომხმარებელი\n\n"
+        f"გსურთ გაგზავნა?",
+        reply_markup=akb.dm_confirm_kb(),
+    )
+    await state.set_state(PrivateDmFSM.waiting_confirm)
+    await call.answer()
+
+
+@router.callback_query(F.data == "adm_dm_send", PrivateDmFSM.waiting_confirm)
+async def dm_execute(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    data = await state.get_data()
+    text = data["dm_text"]
+    photo_id = data.get("dm_photo_id")
+    user_ids = data["dm_user_ids"]
+
+    await call.message.edit_text(f"📨 იგზავნება {len(user_ids)} მომხმარებელთან...")
+    await call.answer()
+
+    sent, failed = 0, 0
+    for uid in user_ids:
+        try:
+            if photo_id:
+                await bot_registry.send_photo_all_bots(
+                    chat_id=uid, photo=photo_id, caption=text,
+                )
+            else:
+                await bot_registry.send_message_all_bots(
+                    chat_id=uid, text=text,
+                )
+            sent += 1
+        except Exception:
+            failed += 1
+        if (sent + failed) % 25 == 0:
+            await asyncio.sleep(1)
+
+    await state.clear()
+    await call.message.edit_text(
+        f"✅ პირადი შეტყობინება გაგზავნილია!\n\n"
         f"📨 გაგზავნილი: {sent}\n"
         f"❌ ვერ გაიგზავნა: {failed}\n"
         f"👥 სულ: {len(user_ids)}",

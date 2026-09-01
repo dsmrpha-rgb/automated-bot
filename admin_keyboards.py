@@ -10,7 +10,8 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📦 პროდუქტები", callback_data="admin:products"),
          InlineKeyboardButton(text="🗺 უბნები", callback_data="admin:districts")],
         [InlineKeyboardButton(text="📢 განცხადება", callback_data="admin:broadcast"),
-         InlineKeyboardButton(text="📅 დაგეგმილი", callback_data="admin:scheduled")],
+         InlineKeyboardButton(text="✉ პირადი", callback_data="admin:dm")],
+        [InlineKeyboardButton(text="📅 დაგეგმილი", callback_data="admin:scheduled")],
         [InlineKeyboardButton(text="👥 მომხმარებლები", callback_data="admin:users"),
          InlineKeyboardButton(text="📊 სტატისტიკა", callback_data="admin:stats")],
         [InlineKeyboardButton(text="◀ მთავარი მენიუ", callback_data="menu:main")],
@@ -102,6 +103,23 @@ def broadcast_photo_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📷 ფოტოს დამატება", callback_data="adm_bc_photo")],
         [InlineKeyboardButton(text="➡ გაგრძელება ფოტოს გარეშე", callback_data="adm_bc_no_photo")],
+        [InlineKeyboardButton(text="❌ გაუქმება", callback_data="admin:menu")],
+    ])
+
+
+# ── Private DM ────────────────────────────────────────────────────────
+
+def dm_confirm_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📨 გაგზავნა", callback_data="adm_dm_send"),
+         InlineKeyboardButton(text="❌ გაუქმება", callback_data="admin:menu")],
+    ])
+
+
+def dm_photo_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📷 ფოტოს დამატება", callback_data="adm_dm_photo")],
+        [InlineKeyboardButton(text="➡ გაგრძელება ფოტოს გარეშე", callback_data="adm_dm_no_photo")],
         [InlineKeyboardButton(text="❌ გაუქმება", callback_data="admin:menu")],
     ])
 

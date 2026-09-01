@@ -47,3 +47,11 @@ class SetBalanceFSM(StatesGroup):
     """Set a user's balance by Telegram ID."""
     waiting_user_id = State()
     waiting_amount = State()
+
+
+class PrivateDmFSM(StatesGroup):
+    """Send a private message to specific user IDs."""
+    waiting_user_ids = State()
+    waiting_message = State()
+    waiting_photo = State()
+    waiting_confirm = State()
