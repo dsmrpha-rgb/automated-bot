@@ -73,7 +73,6 @@
         transform: translateY(-1px);
     }
 
-
     /* Checkbox styling */
     input[type="checkbox"] {
         cursor: pointer;
@@ -85,8 +84,15 @@
         position: relative;
     }
 
-    /* Mobile stats bar */
+    /* ── Mobile card view ── */
+    .mobile-bot-cards { display: none; }
+
     @media (max-width: 768px) {
+        /* Hide desktop table, show mobile cards */
+        .desktop-table { display: none !important; }
+        .mobile-bot-cards { display: block !important; }
+        .desktop-bulk { display: none !important; }
+
         .stats-bar {
             gap: 12px !important;
             flex-direction: column;
@@ -107,6 +113,69 @@
         .page-header > div .btn {
             width: 100%;
             justify-content: center;
+        }
+
+        /* Mobile bot card styling */
+        .mob-card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .mob-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .mob-card-header .bot-info strong {
+            font-size: 16px;
+            display: block;
+        }
+        .mob-card-header .bot-info .sub {
+            color: var(--text2);
+            font-size: 11px;
+        }
+        .mob-card-meta {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: var(--text2);
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .mob-card-meta span strong {
+            color: var(--text);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            display: block;
+            margin-bottom: 2px;
+        }
+        .mob-card-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+        }
+        .mob-card-actions form {
+            display: contents;
+        }
+        .mob-card-actions .btn {
+            width: 100%;
+            justify-content: center;
+            font-size: 11px;
+            padding: 8px 4px;
+            min-width: 0;
+            white-space: nowrap;
+        }
+    }
+
+    @media (max-width: 400px) {
+        .mob-card-actions {
+            grid-template-columns: 1fr 1fr;
         }
     }
 </style>
@@ -153,8 +222,8 @@
 </div>
 {% else %}
 
-<!-- Bulk Actions (separate form, outside the table) -->
-<div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+<!-- Bulk Actions (desktop only) -->
+<div class="desktop-bulk" style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
     <label style="font-size:13px; color:var(--text2); cursor:pointer;">
         <input type="checkbox" id="selectAll" onclick="toggleAll()"> Select All
     </label>
@@ -166,7 +235,8 @@
     <button type="button" class="btn btn-ghost btn-sm" onclick="submitBulk()">Apply to Selected</button>
 </div>
 
-<div class="card">
+<!-- ═══ Desktop table view ═══ -->
+<div class="card desktop-table">
     <div class="table-wrap">
         <table>
             <thead>
@@ -237,6 +307,65 @@
         </table>
     </div>
 </div>
+
+<!-- ═══ Mobile card view ═══ -->
+<div class="mobile-bot-cards">
+    {% for bot in bots %}
+    <div class="mob-card" id="mob-{{ bot.name }}">
+        <div class="mob-card-header">
+            <div class="bot-info">
+                <strong>{{ bot.display_name }}</strong>
+                {% if bot.display_name != bot.name %}
+                <span class="sub">{{ bot.name }}</span>
+                {% endif %}
+                <span class="sub">{{ bot.service }}</span>
+            </div>
+            <div id="mob-status-{{ bot.name }}">
+                {% if bot.status == 'active' %}
+                <span class="badge badge-active">Running</span>
+                {% elif bot.status == 'inactive' %}
+                <span class="badge badge-inactive">Stopped</span>
+                {% else %}
+                <span class="badge badge-other">{{ bot.status }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="mob-card-meta">
+            <span><strong>PID</strong> <span id="mob-pid-{{ bot.name }}">{{ bot.pid if bot.pid != '0' else '—' }}</span></span>
+            <span><strong>Since</strong> {{ bot.since if bot.since else '—' }}</span>
+        </div>
+        <div class="mob-card-actions">
+            {% if bot.status != 'active' %}
+            <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='start') }}">
+                <button class="btn btn-green btn-sm">&#9654; Start</button>
+            </form>
+            {% endif %}
+            {% if bot.status == 'active' %}
+            <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='stop') }}">
+                <button class="btn btn-red btn-sm">&#9632; Stop</button>
+            </form>
+            <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='restart') }}">
+                <button class="btn btn-ghost btn-sm">&#8635; Restart</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('bot_env', name=bot.name) }}" class="btn btn-ghost btn-sm">&#9881; Config</a>
+            <a href="{{ url_for('bot_files', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128196; Files</a>
+            <a href="{{ url_for('bot_logs', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128220; Logs</a>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="openRename('{{ bot.name }}', '{{ bot.display_name }}')">&#9998; Rename</button>
+            <form method="POST" action="{{ url_for('bot_backup', name=bot.name) }}">
+                <button class="btn btn-ghost btn-sm">&#128190; Backup</button>
+            </form>
+            {% if bot.is_git %}
+            <form method="POST" action="{{ url_for('bot_git_pull', name=bot.name) }}">
+                <button class="btn btn-ghost btn-sm" onclick="return confirm('Pull latest from git? A backup will be created first.')">&#8595; Git Pull</button>
+            </form>
+            {% endif %}
+            <button type="button" class="btn btn-red btn-sm" onclick="confirmRemove('{{ bot.name }}', '{{ bot.display_name }}')">&#128465;</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
 {% endif %}
 
 <!-- Rename modal -->
@@ -353,18 +482,34 @@ setInterval(function() {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             for (var name in data) {
+                // Desktop table
                 var el = document.getElementById('status-' + name);
-                if (!el) continue;
-                var s = data[name].status;
-                if (s === 'active') {
-                    el.innerHTML = '<span class="badge badge-active">Running</span>';
-                } else if (s === 'inactive') {
-                    el.innerHTML = '<span class="badge badge-inactive">Stopped</span>';
-                } else {
-                    el.innerHTML = '<span class="badge badge-other">' + s + '</span>';
+                if (el) {
+                    var s = data[name].status;
+                    if (s === 'active') {
+                        el.innerHTML = '<span class="badge badge-active">Running</span>';
+                    } else if (s === 'inactive') {
+                        el.innerHTML = '<span class="badge badge-inactive">Stopped</span>';
+                    } else {
+                        el.innerHTML = '<span class="badge badge-other">' + s + '</span>';
+                    }
+                }
+                // Mobile cards
+                var mobEl = document.getElementById('mob-status-' + name);
+                if (mobEl) {
+                    var s2 = data[name].status;
+                    if (s2 === 'active') {
+                        mobEl.innerHTML = '<span class="badge badge-active">Running</span>';
+                    } else if (s2 === 'inactive') {
+                        mobEl.innerHTML = '<span class="badge badge-inactive">Stopped</span>';
+                    } else {
+                        mobEl.innerHTML = '<span class="badge badge-other">' + s2 + '</span>';
+                    }
                 }
                 var pidEl = document.getElementById('pid-' + name);
                 if (pidEl) pidEl.textContent = data[name].pid !== '0' ? data[name].pid : '—';
+                var mobPidEl = document.getElementById('mob-pid-' + name);
+                if (mobPidEl) mobPidEl.textContent = data[name].pid !== '0' ? data[name].pid : '—';
             }
         })
         .catch(function(){});
