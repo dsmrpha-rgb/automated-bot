@@ -273,11 +273,103 @@
         .modal h3 { margin-bottom: 12px; }
         .modal p { color: var(--text2); font-size: 14px; margin-bottom: 16px; }
         .modal .actions { justify-content: flex-end; }
+
+        /* ── Hamburger menu ──────── */
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        /* ── Mobile responsive ───── */
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 0 16px;
+                height: auto;
+                min-height: 56px;
+                flex-wrap: wrap;
+            }
+            .menu-toggle { display: block; }
+            .nav-links {
+                display: none;
+                width: 100%;
+                flex-direction: column;
+                padding: 8px 0 12px;
+                gap: 4px;
+            }
+            .nav-links.open { display: flex; }
+            .nav-links a {
+                padding: 10px 14px;
+                font-size: 15px;
+            }
+            .container { padding: 16px 12px; }
+            .page-header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            .page-header h1 { font-size: 18px; }
+            .card { padding: 14px; }
+            .card h2 { font-size: 15px; }
+            .modal { width: 95vw; padding: 18px; }
+            .code-area { min-height: 300px; font-size: 12px; }
+            .log-box { height: 350px; font-size: 11px; }
+
+            /* Table → card layout on mobile */
+            .table-wrap table,
+            .table-wrap thead,
+            .table-wrap tbody,
+            .table-wrap th,
+            .table-wrap td,
+            .table-wrap tr {
+                display: block;
+            }
+            .table-wrap thead { display: none; }
+            .table-wrap tr {
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                margin-bottom: 12px;
+                padding: 12px;
+                background: var(--bg2);
+            }
+            .table-wrap td {
+                padding: 4px 0;
+                border-bottom: none;
+                font-size: 14px;
+            }
+            .table-wrap td::before {
+                content: attr(data-label);
+                font-size: 11px;
+                color: var(--text2);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                display: block;
+                margin-bottom: 2px;
+            }
+            .actions {
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 8px;
+            }
+            .actions .btn { flex: 1 1 auto; justify-content: center; min-width: 0; }
+            .btn { padding: 10px 14px; font-size: 14px; }
+            .btn-sm { padding: 8px 12px; font-size: 13px; }
+        }
+
+        @media (max-width: 480px) {
+            .container { padding: 12px 8px; }
+            .actions .btn { font-size: 12px; padding: 8px 10px; }
+        }
     </style>
 </head>
 <body>
     <nav class="navbar">
         <a href="{{ url_for('dashboard') }}" class="logo"><span>&#9881;</span> Bot Panel</a>
+        <button class="menu-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">&#9776;</button>
         <div class="nav-links">
             <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
             <a href="{{ url_for('add_bot') }}" class="{% if request.endpoint == 'add_bot' %}active{% endif %}">+ Add Bot</a>

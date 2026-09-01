@@ -83,11 +83,36 @@
     .btn[title] {
         position: relative;
     }
+
+    /* Mobile stats bar */
+    @media (max-width: 768px) {
+        .stats-bar {
+            gap: 12px !important;
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+        .stats-bar > div:last-child {
+            margin-left: 0 !important;
+            width: 100%;
+        }
+        .stats-bar > div:last-child .btn {
+            width: 100%;
+            justify-content: center;
+        }
+        .page-header > div {
+            width: 100%;
+            flex-direction: column;
+        }
+        .page-header > div .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
 </style>
 
 <!-- Server Stats Bar -->
 <div class="card" style="margin-bottom:20px; padding:14px 20px;">
-    <div style="display:flex; gap:32px; align-items:center; flex-wrap:wrap;">
+    <div class="stats-bar" style="display:flex; gap:32px; align-items:center; flex-wrap:wrap;">
         <div style="font-size:13px; color:var(--text2);">
             <strong style="color:var(--text);">CPU</strong>
             <span class="stat-val" id="stat-cpu">{{ stats.cpu }}%</span>
@@ -157,14 +182,14 @@
             {% for bot in bots %}
                 <tr class="bot-row" id="row-{{ bot.name }}">
                     <td><input type="checkbox" class="bot-cb" value="{{ bot.name }}"></td>
-                    <td>
+                    <td data-label="Bot">
                         <strong>{{ bot.display_name }}</strong>
                         {% if bot.display_name != bot.name %}
                         <br><span style="color:var(--text2); font-size:11px;">{{ bot.name }}</span>
                         {% endif %}
                         <br><span style="color:var(--text2); font-size:11px;">{{ bot.service }}</span>
                     </td>
-                    <td id="status-{{ bot.name }}">
+                    <td data-label="Status" id="status-{{ bot.name }}">
                         {% if bot.status == 'active' %}
                         <span class="badge badge-active">Running</span>
                         {% elif bot.status == 'inactive' %}
@@ -173,9 +198,9 @@
                         <span class="badge badge-other">{{ bot.status }}</span>
                         {% endif %}
                     </td>
-                    <td style="color:var(--text2);" id="pid-{{ bot.name }}">{{ bot.pid if bot.pid != '0' else '—' }}</td>
-                    <td style="color:var(--text2); font-size:13px;">{{ bot.since if bot.since else '—' }}</td>
-                    <td>
+                    <td data-label="PID" style="color:var(--text2);" id="pid-{{ bot.name }}">{{ bot.pid if bot.pid != '0' else '—' }}</td>
+                    <td data-label="Since" style="color:var(--text2); font-size:13px;">{{ bot.since if bot.since else '—' }}</td>
+                    <td data-label="Actions">
                         <div class="actions">
                             {% if bot.status != 'active' %}
                             <form method="POST" action="{{ url_for('bot_action', name=bot.name, action='start') }}" style="display:inline;">
