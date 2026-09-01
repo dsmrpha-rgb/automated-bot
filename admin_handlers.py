@@ -176,9 +176,8 @@ async def add_product_qty(message: Message, state: FSMContext):
     desc = data.get("description", "")
     slug = _slugify(name)
 
-    # Build the button label to match existing format
-    qty_label = "∞" if qty == -1 else str(qty)
-    display_name = f"{name} ({qty_label}) {price}$"
+    # Build the button label: name + price only (quantity is internal, not shown to users)
+    display_name = f"{name} {price}$"
 
     ds.add_product(slug, display_name, price, desc, qty)
     await state.clear()

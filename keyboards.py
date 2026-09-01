@@ -69,18 +69,18 @@ def tbilisi_districts_kb(product_callback: str, lang: str = "ka") -> InlineKeybo
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def order_confirmation_kb(
+async def order_confirmation_kb(
     price_usd: float, product_cb: str, district_cb: str, lang: str = "ka",
 ) -> InlineKeyboardMarkup:
-    """Order confirmation with crypto payment buttons."""
-    rates = texts.t_rates(lang)
+    """Order confirmation with crypto payment buttons (live rates)."""
+    from crypto_rates import get_rates_for_display
+    rates = await get_rates_for_display(price_usd)
     rows = []
     for crypto, info in rates.items():
-        amount = round(price_usd * info["rate"], 6)
         # Encode: pay:BTC|product:prada_2|district:moskovis
         rows.append([
             InlineKeyboardButton(
-                text=f"{info['label']}: {amount}",
+                text=f"{info['label']}: {info['amount']}",
                 callback_data=f"pay:{crypto}|{product_cb}|{district_cb}",
             )
         ])

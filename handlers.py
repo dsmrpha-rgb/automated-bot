@@ -203,7 +203,7 @@ async def on_district_selected(callback: CallbackQuery) -> None:
         photo=FSInputFile(district_image_path(district_img)),
         caption=caption,
         parse_mode="HTML",
-        reply_markup=keyboards.order_confirmation_kb(price_usd, product_cb, district_cb, lang),
+        reply_markup=await keyboards.order_confirmation_kb(price_usd, product_cb, district_cb, lang),
     )
     await callback.answer()
 
@@ -225,8 +225,8 @@ async def on_crypto_payment(callback: CallbackQuery) -> None:
     price_usd = product_info.get("price_usd", _extract_price(product_name))
 
     wallet_address = CRYPTO_WALLETS.get(crypto, "")
-    rates = texts.t_rates(lang)
-    crypto_amount = round(price_usd * rates[crypto]["rate"], 6)
+    from crypto_rates import get_usd_to_crypto
+    crypto_amount = await get_usd_to_crypto(crypto, price_usd)
 
     try:
         await callback.message.delete()
