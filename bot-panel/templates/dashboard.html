@@ -73,6 +73,27 @@
         transform: translateY(-1px);
     }
 
+    /* Mobile action buttons — 2-column grid */
+    @media (max-width: 768px) {
+        td[data-label="Actions"] .actions {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            width: 100%;
+        }
+        td[data-label="Actions"] .actions form {
+            display: contents;
+        }
+        td[data-label="Actions"] .actions .btn {
+            width: 100%;
+            justify-content: center;
+            font-size: 12px;
+            padding: 8px 6px;
+            min-width: 0;
+            white-space: nowrap;
+        }
+    }
+
     /* Checkbox styling */
     input[type="checkbox"] {
         cursor: pointer;

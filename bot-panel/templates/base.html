@@ -286,6 +286,9 @@
         }
 
         /* ── Mobile responsive ───── */
+        /* Force no horizontal overflow */
+        html, body { overflow-x: hidden; max-width: 100vw; }
+
         @media (max-width: 768px) {
             .navbar {
                 padding: 0 16px;
@@ -306,20 +309,21 @@
                 padding: 10px 14px;
                 font-size: 15px;
             }
-            .container { padding: 16px 12px; }
+            .container { padding: 16px 12px; max-width: 100vw; overflow-x: hidden; }
             .page-header {
                 flex-direction: column;
                 gap: 12px;
                 align-items: flex-start;
             }
             .page-header h1 { font-size: 18px; }
-            .card { padding: 14px; }
+            .card { padding: 14px; max-width: 100%; overflow: hidden; }
             .card h2 { font-size: 15px; }
             .modal { width: 95vw; padding: 18px; }
             .code-area { min-height: 300px; font-size: 12px; }
             .log-box { height: 350px; font-size: 11px; }
 
             /* Table → card layout on mobile */
+            .table-wrap { overflow-x: hidden; }
             .table-wrap table,
             .table-wrap thead,
             .table-wrap tbody,
@@ -327,6 +331,7 @@
             .table-wrap td,
             .table-wrap tr {
                 display: block;
+                max-width: 100%;
             }
             .table-wrap thead { display: none; }
             .table-wrap tr {
@@ -335,11 +340,13 @@
                 margin-bottom: 12px;
                 padding: 12px;
                 background: var(--bg2);
+                overflow: hidden;
             }
             .table-wrap td {
                 padding: 4px 0;
                 border-bottom: none;
                 font-size: 14px;
+                overflow: hidden;
             }
             .table-wrap td::before {
                 content: attr(data-label);
