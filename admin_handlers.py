@@ -483,9 +483,10 @@ async def broadcast_ask_photo(call: CallbackQuery, state: FSMContext):
 
 @router.message(BroadcastFSM.waiting_photo, F.photo)
 async def broadcast_photo_received(message: Message, state: FSMContext):
-    """Admin sent a photo — save the file_id."""
+    """Admin sent a photo — download to disk so it works across all bot tokens."""
     photo = message.photo[-1]  # highest resolution
-    await state.update_data(bc_photo_id=photo.file_id)
+    local_path = await bot_registry.download_photo(message.bot, photo.file_id)
+    await state.update_data(bc_photo_id=local_path)
     data = await state.get_data()
     await message.answer(
         f"📢 განცხადების წინასწარი ხედვა:\n\n{data['bc_text']}\n\n📷 ფოტო: დამატებულია\n\nგსურთ გაგზავნა?",
@@ -620,7 +621,8 @@ async def dm_ask_photo(call: CallbackQuery, state: FSMContext):
 @router.message(PrivateDmFSM.waiting_photo, F.photo)
 async def dm_photo_received(message: Message, state: FSMContext):
     photo = message.photo[-1]
-    await state.update_data(dm_photo_id=photo.file_id)
+    local_path = await bot_registry.download_photo(message.bot, photo.file_id)
+    await state.update_data(dm_photo_id=local_path)
     data = await state.get_data()
     ids = data["dm_user_ids"]
     await message.answer(
@@ -739,7 +741,8 @@ async def sched_ask_photo(call: CallbackQuery, state: FSMContext):
 @router.message(ScheduledAnnouncementFSM.waiting_photo, F.photo)
 async def sched_photo_received(message: Message, state: FSMContext):
     photo = message.photo[-1]
-    await state.update_data(sched_photo_id=photo.file_id)
+    local_path = await bot_registry.download_photo(message.bot, photo.file_id)
+    await state.update_data(sched_photo_id=local_path)
     await message.answer(
         "🔄 აირჩიეთ განმეორების ტიპი:",
         reply_markup=akb.recurring_kb(),
