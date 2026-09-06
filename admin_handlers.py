@@ -1069,13 +1069,22 @@ async def blocked_check(call: CallbackQuery):
     bot = call.bot
     blocked = 0
     active = 0
+    deactivated = 0
 
     for uid in all_ids:
         try:
-            await bot.send_chat_action(chat_id=uid, action="typing")
+            chat = await bot.get_chat(chat_id=uid)
+            # If we can get the chat, user hasn't blocked the bot
             active += 1
-        except Exception:
-            blocked += 1
+        except Exception as e:
+            err = str(e).lower()
+            if "blocked" in err or "forbidden" in err:
+                blocked += 1
+            elif "deactivated" in err or "not found" in err:
+                deactivated += 1
+            else:
+                # Unknown error — count as unreachable but not blocked
+                deactivated += 1
 
     text = (
         "🚫 ბლოკერების სტატისტიკა\n"
@@ -1083,6 +1092,7 @@ async def blocked_check(call: CallbackQuery):
         f"👥 სულ მომხმარებლები: {len(all_ids)}\n"
         f"✅ აქტიური: {active}\n"
         f"🚫 დაბლოკილი: {blocked}\n"
+        f"👻 წაშლილი ანგარიში: {deactivated}\n"
     )
     await call.message.edit_text(text, reply_markup=akb.stats_back_kb())
 
