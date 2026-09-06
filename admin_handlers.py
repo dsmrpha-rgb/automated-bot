@@ -1053,6 +1053,40 @@ async def stats_cmd(message: Message):
     await message.answer(text, reply_markup=akb.stats_back_kb())
 
 
+# ── Blocked-by-users check (silent, no messages sent) ────────────────
+
+@router.callback_query(F.data == "admin:blocked_check")
+async def blocked_check(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    await call.answer()
+    await call.message.edit_text(
+        "🔍 მიმდინარეობს შემოწმება...\nეს შეიძლება რამდენიმე წამი გაგრძელდეს.",
+        reply_markup=akb.stats_back_kb(),
+    )
+
+    all_ids = ds.get_all_user_ids()
+    bot = call.bot
+    blocked = 0
+    active = 0
+
+    for uid in all_ids:
+        try:
+            await bot.send_chat_action(chat_id=uid, action="typing")
+            active += 1
+        except Exception:
+            blocked += 1
+
+    text = (
+        "🚫 ბლოკერების სტატისტიკა\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👥 სულ მომხმარებლები: {len(all_ids)}\n"
+        f"✅ აქტიური: {active}\n"
+        f"🚫 დაბლოკილი: {blocked}\n"
+    )
+    await call.message.edit_text(text, reply_markup=akb.stats_back_kb())
+
+
 # ══════════════════════════════════════════════════════════════════════
 #  SCHEDULER BACKGROUND TASK
 # ══════════════════════════════════════════════════════════════════════

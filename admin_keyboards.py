@@ -187,6 +187,7 @@ def users_menu_kb(total: int, banned_count: int) -> InlineKeyboardMarkup:
 
 def stats_back_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚫 ბლოკერების შემოწმება", callback_data="admin:blocked_check")],
         [InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")],
     ])
 
