@@ -18,6 +18,12 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from aiogram import Bot, F, Router
+from aiogram.enums import ChatAction
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+try:
+    from aiogram.exceptions import TelegramNotFound
+except ImportError:
+    TelegramNotFound = TelegramBadRequest  # fallback for older aiogram
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, Message
@@ -1060,9 +1066,10 @@ async def blocked_check(call: CallbackQuery):
     if not _is_admin(call.from_user.id):
         return
     await call.answer()
+    # Use admin_back_kb for loading so it differs from the final markup
     await call.message.edit_text(
         "🔍 მიმდინარეობს შემოწმება...\nეს შეიძლება რამდენიმე წამი გაგრძელდეს.",
-        reply_markup=akb.stats_back_kb(),
+        reply_markup=akb.admin_back_kb("admin:stats"),
     )
 
     all_ids = ds.get_all_user_ids()
@@ -1070,21 +1077,22 @@ async def blocked_check(call: CallbackQuery):
     blocked = 0
     active = 0
     deactivated = 0
+    errors = 0
 
     for uid in all_ids:
         try:
-            chat = await bot.get_chat(chat_id=uid)
-            # If we can get the chat, user hasn't blocked the bot
+            await bot.send_chat_action(chat_id=uid, action=ChatAction.TYPING)
             active += 1
-        except Exception as e:
-            err = str(e).lower()
-            if "blocked" in err or "forbidden" in err:
-                blocked += 1
-            elif "deactivated" in err or "not found" in err:
-                deactivated += 1
-            else:
-                # Unknown error — count as unreachable but not blocked
-                deactivated += 1
+        except TelegramForbiddenError:
+            # "Forbidden: bot was blocked by the user"
+            blocked += 1
+        except (TelegramBadRequest, TelegramNotFound):
+            # User deleted account or chat not found
+            deactivated += 1
+        except Exception:
+            errors += 1
+        # Small delay to avoid Telegram rate limits
+        await asyncio.sleep(0.05)
 
     text = (
         "🚫 ბლოკერების სტატისტიკა\n"
@@ -1094,6 +1102,8 @@ async def blocked_check(call: CallbackQuery):
         f"🚫 დაბლოკილი: {blocked}\n"
         f"👻 წაშლილი ანგარიში: {deactivated}\n"
     )
+    if errors:
+        text += f"⚠ შეცდომა: {errors}\n"
     await call.message.edit_text(text, reply_markup=akb.stats_back_kb())
 
 
