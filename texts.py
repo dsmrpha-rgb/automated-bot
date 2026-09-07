@@ -131,10 +131,10 @@ LANGUAGE_EN_BUTTON = "English 🇬🇧"
 
 # ── Reserve Bots screen ──────────────────────────────────────────
 RESERVE_BOTS_CAPTION = (
-    "MaHades_bot\n"
-    "Madhades_bot\n"
-    "Botbutahado_bot\n"
-    "MamaHadundula_bot"
+    '<a href="https://t.me/MaHades_bot">MaHades_bot</a>\n'
+    '<a href="https://t.me/Madhades_bot">Madhades_bot</a>\n'
+    '<a href="https://t.me/Botbutahado_bot">Botbutahado_bot</a>\n'
+    '<a href="https://t.me/MamaHadundula_bot">MamaHadundula_bot</a>'
 )
 
 # ── Admin notifications ──────────────────────────────────────────

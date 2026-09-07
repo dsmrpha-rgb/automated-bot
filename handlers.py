@@ -503,6 +503,7 @@ async def on_reserve_bots(callback: CallbackQuery) -> None:
             media=InputMediaPhoto(
                 media=FSInputFile(MENU_IMAGE_PATH),
                 caption=texts.t("RESERVE_BOTS_CAPTION", lang),
+                parse_mode="HTML",
             ),
             reply_markup=keyboards.reserve_bots_kb(lang),
         )
@@ -514,6 +515,7 @@ async def on_reserve_bots(callback: CallbackQuery) -> None:
         await callback.message.answer_photo(
             photo=FSInputFile(MENU_IMAGE_PATH),
             caption=texts.t("RESERVE_BOTS_CAPTION", lang),
+            parse_mode="HTML",
             reply_markup=keyboards.reserve_bots_kb(lang),
         )
     await callback.answer()
