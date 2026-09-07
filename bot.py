@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand
 
 from config import BOT_TOKENS
 from handlers import router
@@ -44,8 +45,10 @@ async def main() -> None:
     start_scheduler(bots[0])
     start_deposit_monitor(bots[0])
 
-    # Delete webhooks for all bots
+    # Set menu commands and delete webhooks for all bots
+    commands = [BotCommand(command="start", description="На главную")]
     for bot in bots:
+        await bot.set_my_commands(commands)
         await bot.delete_webhook(drop_pending_updates=True)
 
     # Start polling for all bots with the same dispatcher
