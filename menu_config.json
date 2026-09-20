@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "start_page": "main",
+  "default_lang": "ka",
+  "langs": ["ka", "ru", "en"],
+  "pages": {
+    "main": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "show_admin_button": true,
+      "text": {
+        "ka": "მთავარი მენიუ",
+        "ru": "Главное меню",
+        "en": "Main menu"
+      },
+      "rows": [
+        [
+          {"label": {"ka": "🏙️ ქალაქები", "ru": "🏙️ Города", "en": "🏙️ Cities"}, "action": "page:cities"},
+          {"label": {"ka": "💵 ბალანსი ({balance} $)", "ru": "💵 Баланс ({balance} $)", "en": "💵 Balance ({balance} $)"}, "action": "builtin:balance"}
+        ],
+        [
+          {"label": {"ka": "🎁 შესყიდვები", "ru": "🎁 Покупки", "en": "🎁 Purchases"}, "action": "page:purchases"},
+          {"label": {"ka": "🔥 რეფერალი", "ru": "🔥 Реферал", "en": "🔥 Referral"}, "action": "page:referral"}
+        ],
+        [
+          {"label": {"ka": "👊 სამუშაო", "ru": "👊 Работа", "en": "👊 Work"}, "action": "page:work"},
+          {"label": {"ka": "🧑‍🤝‍🧑 Groups & Channels", "ru": "🧑‍🤝‍🧑 Группы и каналы", "en": "🧑‍🤝‍🧑 Groups & Channels"}, "action": "page:groups"}
+        ],
+        [
+          {"label": {"ka": "🌐 ენა", "ru": "🌐 Язык", "en": "🌐 Language"}, "action": "builtin:language"},
+          {"label": {"ka": "🤖 რეზერვი ბოტები", "ru": "🤖 Резервные боты", "en": "🤖 Reserve bots"}, "action": "page:reserve"}
+        ]
+      ]
+    },
+
+    "cities": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "აირჩიეთ ქალაქი:",
+        "ru": "Выберите город:",
+        "en": "Choose a city:"
+      },
+      "rows": [
+        [
+          {"label": {"ka": "Tbilisi", "ru": "Tbilisi", "en": "Tbilisi"}, "action": "builtin:products"}
+        ],
+        [
+          {"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}
+        ]
+      ]
+    },
+
+    "purchases": {
+      "image": "bought.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🎁 თქვენი შესყიდვები",
+        "ru": "🎁 Ваши покупки",
+        "en": "🎁 Your purchases"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "referral": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🔥 რეფერალური პროგრამა\n\nთქვენი ბმული:\nhttps://t.me/{bot_username}?start={user_id}\n\nმოწვეული: {referrals}\nგამომუშავებული: {earned} $",
+        "ru": "🔥 Реферальная программа\n\nВаша ссылка:\nhttps://t.me/{bot_username}?start={user_id}\n\nПриглашено: {referrals}\nЗаработано: {earned} $",
+        "en": "🔥 Referral program\n\nYour link:\nhttps://t.me/{bot_username}?start={user_id}\n\nInvited: {referrals}\nEarned: {earned} $"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "work": {
+      "image": "vakansia.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "👊 სამუშაო\n\nდაინტერესებულმა პირებმა მოგვწერეთ.",
+        "ru": "👊 Работа\n\nЗаинтересованных просим написать нам.",
+        "en": "👊 Work\n\nInterested? Message us."
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "groups": {
+      "image": "groups.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🧑‍🤝‍🧑 ჯგუფები და არხები",
+        "ru": "🧑‍🤝‍🧑 Группы и каналы",
+        "en": "🧑‍🤝‍🧑 Groups & Channels"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "reserve": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🤖 რეზერვი ბოტები",
+        "ru": "🤖 Резервные боты",
+        "en": "🤖 Reserve bots"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    }
+  }
+}
