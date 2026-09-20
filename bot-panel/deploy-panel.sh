@@ -53,7 +53,7 @@ ok "Repo up to date."
 # ── Copy panel files (preserve .env and venv) ───────────────
 info "Syncing panel files..."
 mkdir -p "$PANEL_DIR/templates"
-cp "$CLONE_DIR/bot-panel/app.py" "$PANEL_DIR/app.py"
+cp "$CLONE_DIR"/bot-panel/*.py "$PANEL_DIR/"
 cp "$CLONE_DIR/bot-panel/requirements.txt" "$PANEL_DIR/requirements.txt"
 cp "$CLONE_DIR"/bot-panel/templates/*.html "$PANEL_DIR/templates/"
 if [ -d "$CLONE_DIR/bot-panel/static" ]; then
