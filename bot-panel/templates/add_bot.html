@@ -40,6 +40,17 @@
             <label>USDT Wallet (optional)</label>
             <input type="text" name="usdt_wallet" placeholder="0x...">
         </div>
+        <hr style="border-color:var(--border); margin:20px 0;">
+        <div class="form-group">
+            <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="use_engine" value="yes" checked>
+                🧩 Config-driven bot (runs bot_engine.py — editable in the Constructor)
+            </label>
+            <span style="font-size:12px; color:var(--text2);">
+                Uncheck only for classic hardcoded bots that run <code>bot.py</code>.
+                The repo must contain <code>bot_engine.py</code> + <code>menu_engine.py</code>.
+            </span>
+        </div>
         <button type="submit" class="btn btn-primary">&#128640; Clone &amp; Deploy</button>
     </form>
 </div>

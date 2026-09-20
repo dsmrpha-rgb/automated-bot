@@ -451,6 +451,7 @@ def add_bot():
         btc = request.form.get("btc_wallet", "").strip()
         ltc = request.form.get("ltc_wallet", "").strip()
         usdt = request.form.get("usdt_wallet", "").strip()
+        use_engine = request.form.get("use_engine") == "yes"
 
         if not name:
             flash("Bot name is required", "error")
@@ -458,6 +459,8 @@ def add_bot():
 
         bot_dir = BOTS_BASE_DIR / name
         service_name = f"bot-{name}"
+        # Config-driven (constructor) bots run bot_engine.py; classic bots run bot.py
+        entrypoint = "bot_engine.py" if use_engine else "bot.py"
 
         # Clone repo
         if repo:
@@ -492,6 +495,21 @@ def add_bot():
             (bot_dir / ".env").write_text("\n".join(env_lines) + "\n")
             os.chmod(bot_dir / ".env", 0o600)
 
+        # Engine bots need a menu_config.json — seed a minimal one if the repo
+        # didn't ship one, so the constructor has something to open.
+        if use_engine:
+            cfg_path = bot_dir / "menu_config.json"
+            if not cfg_path.exists():
+                cfg_path.write_text(json.dumps({
+                    "version": 1, "start_page": "main",
+                    "default_lang": "ka", "langs": ["ka", "ru", "en"],
+                    "pages": {"main": {
+                        "image": "", "parse_mode": "HTML", "show_admin_button": True,
+                        "text": {"ka": "მთავარი მენიუ", "ru": "Главное меню", "en": "Main menu"},
+                        "rows": []
+                    }}
+                }, ensure_ascii=False, indent=2))
+
         # Create systemd service
         service_content = f"""[Unit]
 Description=Telegram Bot - {display_name}
@@ -501,7 +519,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory={bot_dir}
-ExecStart={bot_dir}/venv/bin/python bot.py
+ExecStart={bot_dir}/venv/bin/python {entrypoint}
 Restart=always
 RestartSec=5
 EnvironmentFile={bot_dir}/.env
@@ -520,6 +538,7 @@ WantedBy=multi-user.target
             "service": service_name,
             "display_name": display_name,
             "repo": repo,
+            "engine": use_engine,
         }
         save_bots_config(config)
 
@@ -636,6 +655,15 @@ def delete_backup(name):
     else:
         flash("Backup not found", "error")
     return redirect(url_for("backups_list"))
+
+
+# ── Bot-Shop Constructor blueprint ──────────────────────────
+try:
+    from constructor import constructor_bp
+    app.register_blueprint(constructor_bp)
+except Exception as _e:  # never let the constructor break the panel
+    import logging as _logging
+    _logging.getLogger(__name__).warning("Constructor blueprint not loaded: %s", _e)
 
 
 if __name__ == "__main__":

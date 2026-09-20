@@ -286,6 +286,7 @@
                                 <button class="btn btn-ghost btn-sm" title="Restart bot">&#8635; Restart</button>
                             </form>
                             {% endif %}
+                            <a href="/bot/{{ bot.name }}/constructor" class="btn btn-primary btn-sm" title="Visual bot constructor">&#129513; Constructor</a>
                             <a href="{{ url_for('bot_env', name=bot.name) }}" class="btn btn-ghost btn-sm" title="Edit .env config">&#9881; Config</a>
                             <a href="{{ url_for('bot_files', name=bot.name) }}" class="btn btn-ghost btn-sm" title="Browse & edit files">&#128196; Files</a>
                             <a href="{{ url_for('bot_logs', name=bot.name) }}" class="btn btn-ghost btn-sm" title="View live logs">&#128220; Logs</a>
@@ -348,6 +349,7 @@
                 <button class="btn btn-ghost btn-sm">&#8635; Restart</button>
             </form>
             {% endif %}
+            <a href="/bot/{{ bot.name }}/constructor" class="btn btn-primary btn-sm">&#129513; Constructor</a>
             <a href="{{ url_for('bot_env', name=bot.name) }}" class="btn btn-ghost btn-sm">&#9881; Config</a>
             <a href="{{ url_for('bot_files', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128196; Files</a>
             <a href="{{ url_for('bot_logs', name=bot.name) }}" class="btn btn-ghost btn-sm">&#128220; Logs</a>

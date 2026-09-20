@@ -1,0 +1,553 @@
+{% extends "base.html" %}
+{% block title %}Constructor — {{ display_name }}{% endblock %}
+{% block content %}
+<style>
+    .cx-tabs { display:flex; gap:8px; margin-bottom:16px; }
+    .cx-tab { padding:8px 18px; border-radius:8px; background:var(--bg3); color:var(--text2);
+              cursor:pointer; font-size:14px; border:1px solid var(--border); }
+    .cx-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+    .cx-grid { display:grid; grid-template-columns: 240px 1fr 300px; gap:16px; align-items:start; }
+    @media (max-width: 1100px){ .cx-grid { grid-template-columns:1fr; } }
+
+    .cx-pagelist { display:flex; flex-direction:column; gap:6px; }
+    .cx-page-item { padding:10px 12px; border-radius:8px; background:var(--bg3);
+                    border:1px solid var(--border); cursor:pointer; font-size:14px;
+                    display:flex; align-items:center; justify-content:space-between; gap:6px; }
+    .cx-page-item.active { border-color:var(--accent); background:rgba(108,92,231,0.15); }
+    .cx-page-item .pid { font-weight:600; }
+    .cx-badge-start { font-size:10px; background:var(--green); color:#062; padding:2px 6px;
+                      border-radius:10px; font-weight:700; }
+
+    .cx-row-box { border:1px dashed var(--border); border-radius:8px; padding:8px; margin-bottom:8px; background:var(--bg); }
+    .cx-row-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+    .cx-row-head .lbl { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+    .cx-btn-card { border:1px solid var(--border); border-radius:8px; padding:8px; margin-bottom:6px; background:var(--bg2); }
+    .cx-btn-card .cx-line { display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
+    .cx-mini { padding:4px 8px; font-size:12px; border:1px solid var(--border); background:var(--bg3);
+               color:var(--text); border-radius:6px; cursor:pointer; }
+    .cx-mini:hover { border-color:var(--accent2); }
+    .cx-input { padding:7px 10px; background:var(--bg); border:1px solid var(--border);
+                border-radius:6px; color:var(--text); font-size:13px; }
+    .cx-input:focus { outline:none; border-color:var(--accent); }
+    select.cx-input { cursor:pointer; }
+
+    .cx-lang-tabs { display:flex; gap:4px; margin-bottom:8px; }
+    .cx-lang-tab { padding:4px 12px; font-size:12px; border-radius:6px; background:var(--bg3);
+                   color:var(--text2); cursor:pointer; border:1px solid var(--border); }
+    .cx-lang-tab.active { background:var(--accent2); color:#111; }
+
+    /* Telegram-like preview */
+    .tg-preview { background:#17212b; border-radius:12px; padding:12px; }
+    .tg-photo { width:100%; height:120px; border-radius:8px; object-fit:cover; background:#0e1621;
+                display:flex; align-items:center; justify-content:center; color:#5a6b7b; font-size:12px; }
+    .tg-caption { color:#e7eef5; font-size:13px; white-space:pre-wrap; margin:8px 2px; line-height:1.4; }
+    .tg-kb { display:flex; flex-direction:column; gap:5px; }
+    .tg-kb-row { display:flex; gap:5px; }
+    .tg-key { flex:1; background:#2b5278; color:#fff; text-align:center; padding:8px 4px;
+              border-radius:7px; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    .cx-token-row { display:flex; gap:6px; margin-bottom:6px; }
+    .cx-token-row .cx-input { flex:1; }
+    .cx-help { font-size:12px; color:var(--text2); margin-top:4px; }
+    .cx-save-bar { position:sticky; bottom:0; background:var(--bg2); border-top:1px solid var(--border);
+                   padding:12px 0; margin-top:16px; display:flex; gap:8px; justify-content:flex-end; }
+    .cx-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+                background:var(--bg3); border:1px solid var(--border); padding:10px 18px;
+                border-radius:8px; font-size:14px; opacity:0; transition:opacity .25s; z-index:300; }
+    .cx-toast.show { opacity:1; }
+    .cx-toast.ok { border-color:var(--green); color:var(--green); }
+    .cx-toast.err { border-color:var(--red); color:var(--red); }
+</style>
+
+<div class="page-header">
+    <h1>🧩 Constructor <span style="color:var(--text2);font-size:14px;font-weight:400;">— {{ display_name }}</span></h1>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← Dashboard</a>
+</div>
+
+<div class="cx-tabs">
+    <div class="cx-tab active" data-tab="menu" onclick="cxTab('menu')">Menu Builder</div>
+    <div class="cx-tab" data-tab="env" onclick="cxTab('env')">Tokens &amp; Payments</div>
+</div>
+
+<!-- ═══════════ MENU BUILDER ═══════════ -->
+<div id="tab-menu">
+  <div class="cx-grid">
+    <!-- pages -->
+    <div class="card">
+        <h2>Pages</h2>
+        <div class="cx-pagelist" id="pageList"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%;" onclick="addPage()">+ Add Page</button>
+    </div>
+
+    <!-- editor -->
+    <div class="card">
+        <h2 id="editorTitle">Page</h2>
+        <div id="pageEditor"></div>
+    </div>
+
+    <!-- preview -->
+    <div class="card">
+        <h2>Preview</h2>
+        <div class="cx-lang-tabs" id="previewLangTabs"></div>
+        <div class="tg-preview" id="preview"></div>
+    </div>
+  </div>
+
+  <div class="cx-save-bar">
+    <button class="btn btn-primary" onclick="saveConfig(false)">💾 Save</button>
+    <button class="btn btn-green" onclick="saveConfig(true)">💾 Save &amp; Restart</button>
+  </div>
+</div>
+
+<!-- ═══════════ TOKENS & PAYMENTS ═══════════ -->
+<div id="tab-env" style="display:none;">
+  <div class="card">
+    <h2>Bot Tokens</h2>
+    <div class="cx-help">One token per bot. All listed bots share this menu and admin panel.</div>
+    <div id="tokenList" style="margin-top:10px;"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addToken()">+ Add Token</button>
+  </div>
+
+  <div class="card">
+    <h2>Admin IDs</h2>
+    <div class="cx-help">Numeric Telegram user IDs that get the admin panel button inside the bot.</div>
+    <div id="adminList" style="margin-top:10px;"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addAdmin()">+ Add Admin ID</button>
+  </div>
+
+  <div class="card">
+    <h2>Crypto Wallets</h2>
+    <div class="form-group"><label>BTC wallet</label><input class="cx-input" style="width:100%" id="wBtc" placeholder="bc1..."></div>
+    <div class="form-group"><label>LTC wallet</label><input class="cx-input" style="width:100%" id="wLtc" placeholder="ltc1..."></div>
+    <div class="form-group"><label>USDT (TRC20) wallet</label><input class="cx-input" style="width:100%" id="wUsdt" placeholder="T..."></div>
+  </div>
+
+  <div class="cx-save-bar">
+    <button class="btn btn-primary" onclick="saveEnv(false)">💾 Save</button>
+    <button class="btn btn-green" onclick="saveEnv(true)">💾 Save &amp; Restart</button>
+  </div>
+</div>
+
+<div class="cx-toast" id="toast"></div>
+
+<input type="file" id="imgUpload" accept="image/*" style="display:none;">
+<script>const BOT_NAME = "{{ name }}";</script>
+{% raw %}
+<script>
+const BUILTINS = [
+    {key:"products", label:"Show products"},
+    {key:"balance",  label:"Balance screen"},
+    {key:"language", label:"Language picker"},
+];
+
+let config = null;
+let currentPage = null;
+let currentLang = "ka";
+let images = [];
+
+function toast(msg, ok=true){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "cx-toast show " + (ok?"ok":"err");
+    setTimeout(()=>{ t.className = "cx-toast"; }, 2600);
+}
+
+function api(path, opts){ return fetch("/bot/"+BOT_NAME+path, opts); }
+
+async function boot(){
+    const r = await api("/api/menu-config");
+    const j = await r.json();
+    config = j.config ? j.config : j;
+    if(!config.langs || !config.langs.length) config.langs = ["ka"];
+    currentLang = config.default_lang || config.langs[0];
+    currentPage = config.start_page in config.pages ? config.start_page : Object.keys(config.pages)[0];
+    await loadImages();
+    renderAll();
+    await loadEnv();
+}
+
+async function loadImages(){
+    try{ const r = await api("/api/images"); const j = await r.json(); images = (j.images||[]).map(x=>x.name); }
+    catch(e){ images = []; }
+}
+
+function renderAll(){
+    renderPageList();
+    renderLangTabsForPreview();
+    renderEditor();
+    renderPreview();
+}
+
+/* ── page list ── */
+function renderPageList(){
+    const el = document.getElementById("pageList");
+    el.innerHTML = "";
+    Object.keys(config.pages).forEach(pid=>{
+        const d = document.createElement("div");
+        d.className = "cx-page-item" + (pid===currentPage?" active":"");
+        d.onclick = ()=>{ currentPage = pid; renderAll(); };
+        const isStart = pid===config.start_page;
+        d.innerHTML = `<span class="pid">${esc(pid)}</span>` +
+            (isStart?`<span class="cx-badge-start">START</span>`:"");
+        el.appendChild(d);
+    });
+}
+
+/* ── language tabs (shared) ── */
+function renderLangTabsForPreview(){
+    const wrap = document.getElementById("previewLangTabs");
+    wrap.innerHTML = "";
+    config.langs.forEach(l=>{
+        const t = document.createElement("div");
+        t.className = "cx-lang-tab" + (l===currentLang?" active":"");
+        t.textContent = l.toUpperCase();
+        t.onclick = ()=>{ currentLang = l; renderEditor(); renderPreview(); renderLangTabsForPreview(); };
+        wrap.appendChild(t);
+    });
+}
+
+/* ── page editor ── */
+function renderEditor(){
+    const page = config.pages[currentPage];
+    document.getElementById("editorTitle").textContent = "Page: " + currentPage;
+    const e = document.getElementById("pageEditor");
+
+    let imgOptions = `<option value="">— none —</option>`;
+    images.forEach(im=>{ imgOptions += `<option value="${esc(im)}" ${page.image===im?"selected":""}>${esc(im)}</option>`; });
+
+    e.innerHTML = `
+      <div class="form-group">
+        <label>Page ID</label>
+        <div style="display:flex;gap:6px;">
+          <input class="cx-input" style="flex:1" id="pgId" value="${esc(currentPage)}">
+          <button class="cx-mini" onclick="renamePage()">Rename</button>
+          <button class="cx-mini" onclick="setStart()" ${currentPage===config.start_page?"disabled":""}>Set as START</button>
+          <button class="cx-mini" style="color:var(--red)" onclick="deletePage()">Delete</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Image</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <select class="cx-input" style="flex:1" id="pgImage" onchange="setImage(this.value)">${imgOptions}</select>
+          <button class="cx-mini" onclick="document.getElementById('imgUpload').click()">Upload</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label style="cursor:pointer;">
+          <input type="checkbox" id="pgAdmin" ${page.show_admin_button?"checked":""} onchange="setAdmin(this.checked)">
+          Show admin-panel button (visible only to admin IDs)
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label>Caption text — <b>${currentLang.toUpperCase()}</b></label>
+        <div class="cx-lang-tabs" id="editLangTabs"></div>
+        <textarea class="cx-input" style="width:100%;min-height:80px;font-family:inherit;"
+          id="pgText" oninput="setText(this.value)">${esc(pickText(page.text, currentLang))}</textarea>
+        <div class="cx-help">Placeholders: {balance} {bot_username} {user_id} {referrals} {earned}</div>
+      </div>
+
+      <div class="form-group">
+        <label>Buttons</label>
+        <div id="rowsBox"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="addRow()">+ Add Row</button>
+      </div>
+    `;
+    // edit-lang tabs (mirror preview tabs)
+    const elt = document.getElementById("editLangTabs");
+    config.langs.forEach(l=>{
+        const t = document.createElement("div");
+        t.className = "cx-lang-tab" + (l===currentLang?" active":"");
+        t.textContent = l.toUpperCase();
+        t.onclick = ()=>{ currentLang = l; renderEditor(); renderPreview(); renderLangTabsForPreview(); };
+        elt.appendChild(t);
+    });
+    renderRows();
+}
+
+function renderRows(){
+    const page = config.pages[currentPage];
+    const box = document.getElementById("rowsBox");
+    box.innerHTML = "";
+    page.rows.forEach((row, ri)=>{
+        const rb = document.createElement("div");
+        rb.className = "cx-row-box";
+        let btns = "";
+        row.forEach((btn, bi)=>{
+            btns += buttonCardHTML(btn, ri, bi, row.length);
+        });
+        rb.innerHTML = `
+          <div class="cx-row-head">
+            <span class="lbl">Row ${ri+1}</span>
+            <span>
+              <button class="cx-mini" onclick="moveRow(${ri},-1)" ${ri===0?"disabled":""}>↑</button>
+              <button class="cx-mini" onclick="moveRow(${ri},1)" ${ri===page.rows.length-1?"disabled":""}>↓</button>
+              <button class="cx-mini" onclick="addButton(${ri})">+ Button</button>
+              <button class="cx-mini" style="color:var(--red)" onclick="deleteRow(${ri})">✕ Row</button>
+            </span>
+          </div>
+          ${btns || '<div class="cx-help">empty row</div>'}
+        `;
+        box.appendChild(rb);
+    });
+}
+
+function buttonCardHTML(btn, ri, bi, rowLen){
+    const [type, val] = parseAction(btn.action);
+    let target = "";
+    if(type==="page"){
+        let opts = "";
+        Object.keys(config.pages).forEach(p=>{ opts += `<option value="${esc(p)}" ${val===p?"selected":""}>${esc(p)}</option>`; });
+        target = `<select class="cx-input" onchange="setAction(${ri},${bi},'page',this.value)">${opts}</select>`;
+    } else if(type==="builtin"){
+        let opts = "";
+        BUILTINS.forEach(b=>{ opts += `<option value="${b.key}" ${val===b.key?"selected":""}>${b.label}</option>`; });
+        target = `<select class="cx-input" onchange="setAction(${ri},${bi},'builtin',this.value)">${opts}</select>`;
+    } else if(type==="url"){
+        target = `<input class="cx-input" style="flex:1" value="${esc(val)}" placeholder="https://..."
+                    oninput="setAction(${ri},${bi},'url',this.value)">`;
+    }
+    return `
+      <div class="cx-btn-card">
+        <div class="cx-line">
+          <input class="cx-input" style="flex:1" placeholder="Button label (${currentLang.toUpperCase()})"
+                 value="${esc(pickText(btn.label, currentLang))}"
+                 oninput="setLabel(${ri},${bi},this.value)">
+        </div>
+        <div class="cx-line">
+          <select class="cx-input" onchange="setActionType(${ri},${bi},this.value)">
+            <option value="page"    ${type==="page"?"selected":""}>→ Page</option>
+            <option value="builtin" ${type==="builtin"?"selected":""}>⚙ Builtin</option>
+            <option value="url"     ${type==="url"?"selected":""}>🔗 URL</option>
+            <option value="noop"    ${type==="noop"?"selected":""}>∅ None</option>
+          </select>
+          ${target}
+        </div>
+        <div class="cx-line">
+          <button class="cx-mini" onclick="moveBtnH(${ri},${bi},-1)" ${bi===0?"disabled":""}>←</button>
+          <button class="cx-mini" onclick="moveBtnH(${ri},${bi},1)" ${bi===rowLen-1?"disabled":""}>→</button>
+          <button class="cx-mini" onclick="moveBtnV(${ri},${bi},-1)">⬆ row</button>
+          <button class="cx-mini" onclick="moveBtnV(${ri},${bi},1)">⬇ row</button>
+          <button class="cx-mini" style="color:var(--red)" onclick="deleteButton(${ri},${bi})">✕</button>
+        </div>
+      </div>`;
+}
+
+/* ── preview ── */
+function renderPreview(){
+    const page = config.pages[currentPage];
+    const el = document.getElementById("preview");
+    const cap = renderVars(pickText(page.text, currentLang));
+    let kb = "";
+    page.rows.forEach(row=>{
+        let keys = "";
+        row.forEach(btn=>{ keys += `<div class="tg-key">${esc(pickText(btn.label, currentLang) || "·")}</div>`; });
+        if(keys) kb += `<div class="tg-kb-row">${keys}</div>`;
+    });
+    if(page.show_admin_button) kb += `<div class="tg-kb-row"><div class="tg-key">⚙ ადმინ პანელი</div></div>`;
+    const photo = page.image
+        ? `<img class="tg-photo" src="/bot/${BOT_NAME}/api/image/${encodeURIComponent(page.image)}" onerror="this.replaceWith(document.createTextNode(''))">`
+        : `<div class="tg-photo">no image</div>`;
+    el.innerHTML = `${photo}<div class="tg-caption">${esc(cap)||"<i>no text</i>"}</div><div class="tg-kb">${kb}</div>`;
+}
+
+/* ── mutations ── */
+function setText(v){ ensureObj(config.pages[currentPage],"text"); config.pages[currentPage].text[currentLang]=v; renderPreview(); }
+function setImage(v){ config.pages[currentPage].image=v; renderPreview(); }
+function setAdmin(v){ config.pages[currentPage].show_admin_button=v; renderPreview(); }
+function setLabel(ri,bi,v){ const b=config.pages[currentPage].rows[ri][bi]; ensureObj(b,"label"); b.label[currentLang]=v; renderPreview(); }
+
+function setActionType(ri,bi,t){
+    const b = config.pages[currentPage].rows[ri][bi];
+    if(t==="page") b.action = "page:"+(config.start_page||Object.keys(config.pages)[0]);
+    else if(t==="builtin") b.action = "builtin:"+BUILTINS[0].key;
+    else if(t==="url") b.action = "url:https://";
+    else b.action = "noop";
+    renderRows(); renderPreview();
+}
+function setAction(ri,bi,t,val){
+    const b = config.pages[currentPage].rows[ri][bi];
+    b.action = t==="noop" ? "noop" : t+":"+val;
+    renderPreview();
+}
+
+function addRow(){ config.pages[currentPage].rows.push([newButton()]); renderRows(); renderPreview(); }
+function deleteRow(ri){ config.pages[currentPage].rows.splice(ri,1); renderRows(); renderPreview(); }
+function moveRow(ri,dir){
+    const rows=config.pages[currentPage].rows; const j=ri+dir;
+    if(j<0||j>=rows.length) return;
+    [rows[ri],rows[j]]=[rows[j],rows[ri]]; renderRows(); renderPreview();
+}
+function addButton(ri){ config.pages[currentPage].rows[ri].push(newButton()); renderRows(); renderPreview(); }
+function deleteButton(ri,bi){
+    const rows=config.pages[currentPage].rows;
+    rows[ri].splice(bi,1);
+    if(rows[ri].length===0) rows.splice(ri,1);
+    renderRows(); renderPreview();
+}
+function moveBtnH(ri,bi,dir){
+    const row=config.pages[currentPage].rows[ri]; const j=bi+dir;
+    if(j<0||j>=row.length) return;
+    [row[bi],row[j]]=[row[j],row[bi]]; renderRows(); renderPreview();
+}
+function moveBtnV(ri,bi,dir){
+    const rows=config.pages[currentPage].rows;
+    const btn=rows[ri][bi];
+    let tr=ri+dir;
+    if(tr<0){ rows.unshift([]); tr=0; ri=1; }
+    else if(tr>=rows.length){ rows.push([]); tr=rows.length-1; }
+    rows[ri].splice(bi,1);
+    rows[tr].push(btn);
+    // clean empty rows
+    for(let i=rows.length-1;i>=0;i--) if(rows[i].length===0) rows.splice(i,1);
+    renderRows(); renderPreview();
+}
+
+function newButton(){ const p={}; p[currentLang]="Button"; return {label:p, action:"noop"}; }
+
+/* ── page ops ── */
+function addPage(){
+    let base="page", i=1, id;
+    do { id=base+i; i++; } while(id in config.pages);
+    const t={}; config.langs.forEach(l=>t[l]="");
+    config.pages[id]={image:"",parse_mode:"HTML",show_admin_button:false,text:t,rows:[]};
+    currentPage=id; renderAll();
+}
+function renamePage(){
+    const nid=document.getElementById("pgId").value.trim();
+    if(!/^[a-z0-9_]{1,40}$/.test(nid)){ toast("id: a-z 0-9 _ only",false); return; }
+    if(nid===currentPage) return;
+    if(nid in config.pages){ toast("id already exists",false); return; }
+    config.pages[nid]=config.pages[currentPage];
+    delete config.pages[currentPage];
+    // repoint references
+    Object.values(config.pages).forEach(pg=>pg.rows.forEach(r=>r.forEach(b=>{
+        if(b.action==="page:"+currentPage) b.action="page:"+nid;
+    })));
+    if(config.start_page===currentPage) config.start_page=nid;
+    currentPage=nid; renderAll(); toast("renamed");
+}
+function setStart(){ config.start_page=currentPage; renderAll(); toast("start page set"); }
+function deletePage(){
+    if(Object.keys(config.pages).length<=1){ toast("need at least one page",false); return; }
+    if(currentPage===config.start_page){ toast("can't delete START page",false); return; }
+    if(!confirm("Delete page '"+currentPage+"'?")) return;
+    delete config.pages[currentPage];
+    currentPage=config.start_page;
+    renderAll();
+}
+
+/* ── save ── */
+async function saveConfig(restart){
+    const r = await api("/api/menu-config", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(config)
+    });
+    const j = await r.json();
+    if(!r.ok){ toast(j.error||"save failed",false); return; }
+    if(restart){ await doRestart(); } else { toast("saved ✓"); }
+}
+async function doRestart(){
+    const r = await api("/api/restart",{method:"POST"});
+    const j = await r.json();
+    if(r.ok) toast("saved & restarted ✓"); else toast(j.error||"restart failed",false);
+}
+
+/* ── image upload ── */
+document.getElementById("imgUpload").addEventListener("change", async function(){
+    if(!this.files.length) return;
+    const fd = new FormData(); fd.append("file", this.files[0]);
+    const r = await api("/api/images",{method:"POST", body:fd});
+    const j = await r.json();
+    if(!r.ok){ toast(j.error||"upload failed",false); return; }
+    await loadImages();
+    config.pages[currentPage].image = j.name;
+    renderEditor(); renderPreview(); toast("image uploaded");
+    this.value="";
+});
+
+/* ── env tab ── */
+let envState = {tokens:[], admins:[], btc:"", ltc:"", usdt:""};
+async function loadEnv(){
+    try{
+        const r = await api("/api/env"); envState = await r.json();
+    }catch(e){}
+    renderEnv();
+}
+function renderEnv(){
+    const tl=document.getElementById("tokenList"); tl.innerHTML="";
+    (envState.tokens.length?envState.tokens:[""]).forEach((tok,i)=>{
+        const d=document.createElement("div"); d.className="cx-token-row";
+        d.innerHTML=`<input class="cx-input" value="${esc(tok)}" placeholder="123456:AA..." oninput="envState.tokens[${i}]=this.value">
+                     <button class="cx-mini" style="color:var(--red)" onclick="delToken(${i})">✕</button>`;
+        tl.appendChild(d);
+    });
+    if(!envState.tokens.length) envState.tokens=[""];
+
+    const al=document.getElementById("adminList"); al.innerHTML="";
+    (envState.admins.length?envState.admins:[""]).forEach((a,i)=>{
+        const d=document.createElement("div"); d.className="cx-token-row";
+        d.innerHTML=`<input class="cx-input" value="${esc(a)}" placeholder="Telegram user ID" oninput="envState.admins[${i}]=this.value">
+                     <button class="cx-mini" style="color:var(--red)" onclick="delAdmin(${i})">✕</button>`;
+        al.appendChild(d);
+    });
+    if(!envState.admins.length) envState.admins=[""];
+
+    document.getElementById("wBtc").value=envState.btc||"";
+    document.getElementById("wLtc").value=envState.ltc||"";
+    document.getElementById("wUsdt").value=envState.usdt||"";
+}
+function addToken(){ envState.tokens.push(""); renderEnv(); }
+function delToken(i){ envState.tokens.splice(i,1); renderEnv(); }
+function addAdmin(){ envState.admins.push(""); renderEnv(); }
+function delAdmin(i){ envState.admins.splice(i,1); renderEnv(); }
+async function saveEnv(restart){
+    envState.btc=document.getElementById("wBtc").value;
+    envState.ltc=document.getElementById("wLtc").value;
+    envState.usdt=document.getElementById("wUsdt").value;
+    const body={
+        tokens: envState.tokens.filter(t=>t.trim()),
+        admins: envState.admins.filter(a=>a.trim()),
+        btc:envState.btc, ltc:envState.ltc, usdt:envState.usdt
+    };
+    const r=await api("/api/env",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(!r.ok){ toast(j.error||"save failed",false); return; }
+    if(restart){ await doRestart(); } else { toast("env saved ✓"); }
+}
+
+/* ── tabs ── */
+function cxTab(t){
+    document.querySelectorAll(".cx-tab").forEach(x=>x.classList.toggle("active", x.dataset.tab===t));
+    document.getElementById("tab-menu").style.display = t==="menu"?"":"none";
+    document.getElementById("tab-env").style.display = t==="env"?"":"none";
+}
+
+/* ── helpers ── */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function pickText(field, lang){
+    if(field==null) return "";
+    if(typeof field==="string") return field;
+    return field[lang] || field[config.default_lang] || Object.values(field)[0] || "";
+}
+function ensureObj(o,k){ if(typeof o[k]!=="object"||o[k]==null){ const v=o[k]; o[k]={}; if(typeof v==="string") o[k][config.default_lang]=v; } }
+function parseAction(a){
+    a=a||"noop";
+    if(a.startsWith("page:")) return ["page", a.slice(5)];
+    if(a.startsWith("builtin:")) return ["builtin", a.slice(8)];
+    if(a.startsWith("url:")) return ["url", a.slice(4)];
+    return ["noop",""];
+}
+function renderVars(t){
+    return String(t||"").replace(/\{(\w+)\}/g, (m,k)=>({
+        balance:"0", bot_username:"your_bot", user_id:"123456", referrals:"0", earned:"0.0"
+    }[k] ?? m));
+}
+
+boot();
+</script>
+{% endraw %}
+{% endblock %}
