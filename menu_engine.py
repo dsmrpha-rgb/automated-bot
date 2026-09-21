@@ -176,6 +176,66 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+# ── catalog (products / districts) ───────────────────────────────────────────
+def _list_items(source: str, city: str) -> dict:
+    """Return {slug: item_dict} for a data-driven list."""
+    try:
+        if source == "districts":
+            return ds.get_districts(city or "tbilisi")
+        return ds.get_products(city or "tbilisi")
+    except Exception:
+        return {}
+
+
+def _lookup_item(source: str, city: str, slug: str) -> dict | None:
+    if not slug:
+        return None
+    try:
+        if source == "districts":
+            return ds.get_districts(city or "tbilisi").get(slug)
+        item = ds.get_product(slug)
+        if item is not None:
+            return item
+        return ds.get_products(city or "tbilisi").get(slug)
+    except Exception:
+        return None
+
+
+def _apply_item_lookup(page: dict, uid: int) -> None:
+    """If a page declares item_lookup, load the selected item and merge its
+    fields into the session vars so templates can use {name} {price} …"""
+    il = page.get("item_lookup")
+    if not il:
+        return
+    v = _sess(uid)["vars"]
+    slug = v.get(il.get("var", "product"))
+    item = _lookup_item(il.get("source", "products"), il.get("city", "tbilisi"), slug)
+    if not item:
+        return
+    v["name"] = item.get("name", "")
+    v["description"] = item.get("description", "")
+    if "price_usd" in item:
+        v["price"] = item.get("price_usd")
+
+
+def _list_keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> InlineKeyboardMarkup:
+    """Keyboard for a `list` page: one button per data item, then static rows."""
+    source = page.get("source", "products")
+    city = page.get("city", "tbilisi")
+    item_var = page.get("item_var", "product")
+    target = page.get("item_target", "main")
+    rows: list[list[InlineKeyboardButton]] = []
+    for slug, item in _list_items(source, city).items():
+        rows.append([InlineKeyboardButton(
+            text=str(item.get("name", slug)),
+            callback_data=f"pick|{item_var}|{target}|{slug}",
+        )])
+    # static extra rows (e.g. a back button) reuse the normal builder
+    extra = _keyboard(page, lang, default_lang, ctx, uid)
+    rows.extend(extra.inline_keyboard)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 # ── receipt computation ──────────────────────────────────────────────────────
 async def _compute_receipt(page: dict, uid: int) -> tuple[str | None, dict]:
     """Fill session vars for a receipt page. Returns (qr_path_or_None, ctx)."""
@@ -232,6 +292,9 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     lang = _lang(uid, cfg)
     ptype = page.get("type", "message")
 
+    # merge selected product/district fields into session vars for templating
+    _apply_item_lookup(page, uid)
+
     # input page: arm the awaiting-input state, then render its prompt as a message
     if ptype == "input":
         inp = page.get("input", {}) or {}
@@ -245,7 +308,10 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     ctx = await _context(uid, bot)
     caption = _fmt(_pick(page.get("text", ""), lang, default_lang), ctx)
     parse_mode = page.get("parse_mode") or None
-    kb = _keyboard(page, lang, default_lang, ctx, uid)
+    if ptype == "list":
+        kb = _list_keyboard(page, lang, default_lang, ctx, uid)
+    else:
+        kb = _keyboard(page, lang, default_lang, ctx, uid)
     img = qr_override or _image_path(page.get("image", ""))
 
     await _emit(message, caption, parse_mode, kb, img, is_start=is_start)
@@ -303,6 +369,18 @@ async def engine_back_main(callback: CallbackQuery) -> None:
 @engine_router.callback_query(F.data.startswith("page:"))
 async def engine_navigate(callback: CallbackQuery) -> None:
     await render_page(callback, callback.data.split(":", 1)[1])
+    await callback.answer()
+
+
+@engine_router.callback_query(F.data.startswith("pick|"))
+async def engine_pick(callback: CallbackQuery) -> None:
+    # pick|<item_var>|<target_page>|<slug>   (slug may contain ':')
+    try:
+        _, item_var, target, slug = callback.data.split("|", 3)
+    except ValueError:
+        await callback.answer(); return
+    _sess(callback.from_user.id)["vars"][item_var] = slug
+    await render_page(callback, target)
     await callback.answer()
 
 
