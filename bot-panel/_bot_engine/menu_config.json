@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "start_page": "main",
+  "default_lang": "ka",
+  "langs": ["ka", "ru", "en"],
+  "pages": {
+    "main": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "show_admin_button": true,
+      "text": {
+        "ka": "მთავარი მენიუ",
+        "ru": "Главное меню",
+        "en": "Main menu"
+      },
+      "rows": [
+        [
+          {"label": {"ka": "🏙️ ქალაქები", "ru": "🏙️ Города", "en": "🏙️ Cities"}, "action": "page:cities"},
+          {"label": {"ka": "💵 ბალანსი ({balance} $)", "ru": "💵 Баланс ({balance} $)", "en": "💵 Balance ({balance} $)"}, "action": "page:topup_amount"}
+        ],
+        [
+          {"label": {"ka": "🎁 შესყიდვები", "ru": "🎁 Покупки", "en": "🎁 Purchases"}, "action": "page:purchases"},
+          {"label": {"ka": "🔥 რეფერალი", "ru": "🔥 Реферал", "en": "🔥 Referral"}, "action": "page:referral"}
+        ],
+        [
+          {"label": {"ka": "👊 სამუშაო", "ru": "👊 Работа", "en": "👊 Work"}, "action": "page:work"},
+          {"label": {"ka": "🧑‍🤝‍🧑 Groups & Channels", "ru": "🧑‍🤝‍🧑 Группы и каналы", "en": "🧑‍🤝‍🧑 Groups & Channels"}, "action": "page:groups"}
+        ],
+        [
+          {"label": {"ka": "🌐 ენა", "ru": "🌐 Язык", "en": "🌐 Language"}, "action": "builtin:language"},
+          {"label": {"ka": "🤖 რეზერვი ბოტები", "ru": "🤖 Резервные боты", "en": "🤖 Reserve bots"}, "action": "page:reserve"}
+        ]
+      ]
+    },
+
+    "cities": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "აირჩიეთ ქალაქი:",
+        "ru": "Выберите город:",
+        "en": "Choose a city:"
+      },
+      "rows": [
+        [
+          {"label": {"ka": "Tbilisi", "ru": "Tbilisi", "en": "Tbilisi"}, "action": "page:products"}
+        ],
+        [
+          {"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}
+        ]
+      ]
+    },
+
+    "products": {
+      "type": "list",
+      "source": "products",
+      "city": "tbilisi",
+      "item_var": "product",
+      "item_target": "product_detail",
+      "image": "listing.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "აირჩიე პროდუქტი:",
+        "ru": "Выберите товар:",
+        "en": "Choose a product:"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "product_detail": {
+      "type": "message",
+      "item_lookup": {"source": "products", "city": "tbilisi", "var": "product"},
+      "image": "listing.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "<b>{name}</b>\n\nფასი: {price} $\n{description}\n\nაირჩიე გადახდის მეთოდი:",
+        "ru": "<b>{name}</b>\n\nЦена: {price} $\n{description}\n\nВыберите способ оплаты:",
+        "en": "<b>{name}</b>\n\nPrice: {price} $\n{description}\n\nChoose a payment method:"
+      },
+      "rows": [
+        [{"label": {"ka": "LTC", "ru": "LTC", "en": "LTC"}, "action": "choose:crypto:LTC:product_receipt"}],
+        [{"label": {"ka": "USDT TRC-20", "ru": "USDT TRC-20", "en": "USDT TRC-20"}, "action": "choose:crypto:USDT:product_receipt"}],
+        [{"label": {"ka": "₿ BTC", "ru": "₿ BTC", "en": "₿ BTC"}, "action": "choose:crypto:BTC:product_receipt"}],
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:products"}]
+      ]
+    },
+
+    "product_receipt": {
+      "type": "receipt",
+      "item_lookup": {"source": "products", "city": "tbilisi", "var": "product"},
+      "parse_mode": "HTML",
+      "receipt": {
+        "coin_var": "crypto",
+        "coin_fixed": "",
+        "amount_var": "price",
+        "fiat_to_usd": 1.0,
+        "use_qr": true,
+        "request_id_var": "request_id"
+      },
+      "text": {
+        "ka": "Заявка #{request_id}\n<b>{name}</b>\n\n🚨 <b>ВНИМАНИЕ</b>\nСумма: <b>{crypto_amount} {coin}</b>\n\nРеквизиты:\n<code>{wallet}</code>\n\n⏳ 30 минут. Отправь точную сумму одним платежом.",
+        "ru": "Заявка #{request_id}\n<b>{name}</b>\n\n🚨 <b>ВНИМАНИЕ</b>\nСумма: <b>{crypto_amount} {coin}</b>\n\nРеквизиты:\n<code>{wallet}</code>\n\n⏳ 30 минут. Отправь точную сумму одним платежом.",
+        "en": "Request #{request_id}\n<b>{name}</b>\n\n🚨 <b>ATTENTION</b>\nAmount: <b>{crypto_amount} {coin}</b>\n\nPay to:\n<code>{wallet}</code>\n\n⏳ 30 min. Send the exact amount in one payment."
+      },
+      "rows": [
+        [{"label": {"ka": "✅ გადავიხადე", "ru": "✅ Я оплатил", "en": "✅ I paid"}, "action": "confirm:topup_done", "style": "green"}],
+        [{"label": {"ka": "❌ გაუქმება", "ru": "❌ Отмена", "en": "❌ Cancel"}, "action": "page:products", "style": "red"}]
+      ]
+    },
+
+    "purchases": {
+      "image": "bought.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🎁 თქვენი შესყიდვები",
+        "ru": "🎁 Ваши покупки",
+        "en": "🎁 Your purchases"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "referral": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🔥 რეფერალური პროგრამა\n\nთქვენი ბმული:\nhttps://t.me/{bot_username}?start={user_id}\n\nმოწვეული: {referrals}\nგამომუშავებული: {earned} $",
+        "ru": "🔥 Реферальная программа\n\nВаша ссылка:\nhttps://t.me/{bot_username}?start={user_id}\n\nПриглашено: {referrals}\nЗаработано: {earned} $",
+        "en": "🔥 Referral program\n\nYour link:\nhttps://t.me/{bot_username}?start={user_id}\n\nInvited: {referrals}\nEarned: {earned} $"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "work": {
+      "image": "vakansia.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "👊 სამუშაო\n\nდაინტერესებულმა პირებმა მოგვწერეთ.",
+        "ru": "👊 Работа\n\nЗаинтересованных просим написать нам.",
+        "en": "👊 Work\n\nInterested? Message us."
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "groups": {
+      "image": "groups.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🧑‍🤝‍🧑 ჯგუფები და არხები",
+        "ru": "🧑‍🤝‍🧑 Группы и каналы",
+        "en": "🧑‍🤝‍🧑 Groups & Channels"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "reserve": {
+      "image": "menu.jpg",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "🤖 რეზერვი ბოტები",
+        "ru": "🤖 Резервные боты",
+        "en": "🤖 Reserve bots"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "topup_amount": {
+      "type": "input",
+      "image": "",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "შეიყვანე შესავსები თანხა (ლარში). მინიმუმ 10, მაქსიმუმ 3000.",
+        "ru": "Введи сумму пополнения в лари. Не менее 10 и не более 3000.",
+        "en": "Enter the top-up amount (GEL). Min 10, max 3000."
+      },
+      "input": {
+        "var": "amount",
+        "kind": "number",
+        "min": 10,
+        "max": 3000,
+        "error": {
+          "ka": "❌ არასწორი თანხა. სცადე თავიდან (10–3000).",
+          "ru": "❌ Неверная сумма. Попробуй ещё раз (10–3000).",
+          "en": "❌ Invalid amount. Try again (10–3000)."
+        },
+        "next": "topup_crypto"
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "topup_crypto": {
+      "type": "message",
+      "image": "",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "აირჩიე რომელი კრიპტოთი გადაიხდი:",
+        "ru": "С какой крипты вы хотите оплатить:",
+        "en": "Which crypto do you want to pay with:"
+      },
+      "rows": [
+        [{"label": {"ka": "LTC", "ru": "LTC", "en": "LTC"}, "action": "choose:crypto:LTC:topup_receipt"}],
+        [{"label": {"ka": "USDT TRC-20", "ru": "USDT TRC-20", "en": "USDT TRC-20"}, "action": "choose:crypto:USDT:topup_receipt"}],
+        [{"label": {"ka": "₿ BTC", "ru": "₿ BTC", "en": "₿ BTC"}, "action": "choose:crypto:BTC:topup_receipt"}],
+        [{"label": {"ka": "⬅️ უკან", "ru": "⬅️ Назад", "en": "⬅️ Back"}, "action": "page:main"}]
+      ]
+    },
+
+    "topup_receipt": {
+      "type": "receipt",
+      "image": "",
+      "parse_mode": "HTML",
+      "receipt": {
+        "coin_var": "crypto",
+        "coin_fixed": "",
+        "amount_var": "amount",
+        "fiat_to_usd": 0.37,
+        "use_qr": true,
+        "request_id_var": "request_id"
+      },
+      "text": {
+        "ka": "Заявка #{request_id}\nСпособ: {coin}\n\n🚨 <b>ВНИМАНИЕ</b>\nСумма к оплате: <b>{crypto_amount} {coin}</b>\n\nРеквизиты для оплаты:\n<code>{wallet}</code>\n\n⏳ Время для оплаты — 30 минут.\n🚨 Отправь точную сумму одним платежом!\n🚨 После оплаты нажми «Я оплатил».",
+        "ru": "Заявка #{request_id}\nСпособ: {coin}\n\n🚨 <b>ВНИМАНИЕ</b>\nСумма к оплате: <b>{crypto_amount} {coin}</b>\n\nРеквизиты для оплаты:\n<code>{wallet}</code>\n\n⏳ Время для оплаты — 30 минут.\n🚨 Отправь точную сумму одним платежом!\n🚨 После оплаты нажми «Я оплатил».",
+        "en": "Request #{request_id}\nMethod: {coin}\n\n🚨 <b>ATTENTION</b>\nAmount to pay: <b>{crypto_amount} {coin}</b>\n\nPay to:\n<code>{wallet}</code>\n\n⏳ 30 minutes to pay.\n🚨 Send the exact amount in one payment!\n🚨 After paying press “I paid”."
+      },
+      "rows": [
+        [{"label": {"ka": "✅ გადავიხადე", "ru": "✅ Я оплатил", "en": "✅ I paid"}, "action": "confirm:topup_done", "style": "green"}],
+        [{"label": {"ka": "❌ გაუქმება", "ru": "❌ Отмена", "en": "❌ Cancel"}, "action": "page:main", "style": "red"}]
+      ]
+    },
+
+    "topup_done": {
+      "type": "message",
+      "image": "",
+      "parse_mode": "HTML",
+      "text": {
+        "ka": "✅ მადლობა! გადახდა მუშავდება. ბალანსი განახლდება ავტომატურად.",
+        "ru": "✅ Спасибо! Платёж обрабатывается. Баланс обновится автоматически.",
+        "en": "✅ Thanks! Payment is processing. Your balance will update automatically."
+      },
+      "rows": [
+        [{"label": {"ka": "⬅️ მთავარი", "ru": "⬅️ Главное", "en": "⬅️ Main"}, "action": "page:main"}]
+      ]
+    }
+  }
+}
