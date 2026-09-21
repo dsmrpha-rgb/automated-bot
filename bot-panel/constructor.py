@@ -36,7 +36,30 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_CONFIG_BYTES = 2 * 1024 * 1024
 
 _SLUG_RE = re.compile(r"^[a-z0-9_]{1,40}$")
-_ACTION_RE = re.compile(r"^(page:[a-z0-9_]{1,40}|builtin:[a-z0-9_]{1,30}|url:https?://\S{1,300}|noop)$")
+_ACTION_RE = re.compile(
+    r"^("
+    r"page:[a-z0-9_]{1,40}"
+    r"|builtin:[a-z0-9_]{1,30}"
+    r"|url:https?://\S{1,300}"
+    r"|choose:[a-zA-Z0-9_]{1,30}:[a-zA-Z0-9_\-.]{1,40}:[a-z0-9_]{1,40}"
+    r"|confirm:[a-z0-9_]{1,40}"
+    r"|noop"
+    r")$"
+)
+_PAGE_TYPES = {"message", "input", "receipt"}
+_STYLES = {"green", "red", "check", "cross"}
+
+
+def _action_target_page(action: str) -> str | None:
+    """Return the page id an action navigates to, if any."""
+    if action.startswith("page:"):
+        return action.split(":", 1)[1]
+    if action.startswith("confirm:"):
+        return action.split(":", 1)[1]
+    if action.startswith("choose:"):
+        parts = action.split(":", 3)
+        return parts[3] if len(parts) == 4 else None
+    return None
 
 
 # ── auth (mirror the panel's login_required) ───────────────────────────────
@@ -138,9 +161,13 @@ def _validate_config(cfg: dict) -> tuple[bool, str, dict]:
                 action = str(btn.get("action", "noop"))
                 if not _ACTION_RE.match(action):
                     return False, f"page '{pid}': invalid action '{action}'", {}
-                if action.startswith("page:") and action.split(":", 1)[1] not in pages:
-                    return False, f"page '{pid}': button points to missing page '{action}'", {}
-                clean_row.append({"label": label, "action": action})
+                tgt = _action_target_page(action)
+                if tgt is not None and tgt not in pages:
+                    return False, f"page '{pid}': button points to missing page '{tgt}'", {}
+                clean_btn = {"label": label, "action": action}
+                if btn.get("style") in _STYLES:
+                    clean_btn["style"] = btn["style"]
+                clean_row.append(clean_btn)
             if clean_row:
                 clean_rows.append(clean_row)
 
@@ -148,13 +175,53 @@ def _validate_config(cfg: dict) -> tuple[bool, str, dict]:
         if img and (os.path.sep in img or ".." in img or img.startswith("/")):
             return False, f"page '{pid}': image must be a bare filename", {}
 
-        clean_pages[pid] = {
+        ptype = page.get("type", "message")
+        if ptype not in _PAGE_TYPES:
+            ptype = "message"
+
+        clean_page = {
+            "type": ptype,
             "image": img,
             "parse_mode": page.get("parse_mode") or "HTML",
             "show_admin_button": bool(page.get("show_admin_button", False)),
             "text": text,
             "rows": clean_rows,
         }
+
+        if ptype == "input":
+            inp = page.get("input", {}) or {}
+            nxt = str(inp.get("next", "") or "")
+            if nxt and nxt not in pages:
+                return False, f"page '{pid}': input.next points to missing page '{nxt}'", {}
+            err = inp.get("error", "")
+            if isinstance(err, str):
+                err = {default_lang: err}
+            elif isinstance(err, dict):
+                err = {k: str(v) for k, v in err.items()}
+            else:
+                err = {default_lang: ""}
+            clean_page["input"] = {
+                "var": re.sub(r"[^a-zA-Z0-9_]", "", str(inp.get("var", "value")))[:30] or "value",
+                "kind": "number" if inp.get("kind") == "number" else "text",
+                "min": inp.get("min"),
+                "max": inp.get("max"),
+                "regex": str(inp.get("regex", "") or "")[:200],
+                "error": err,
+                "next": nxt,
+            }
+
+        if ptype == "receipt":
+            rc = page.get("receipt", {}) or {}
+            clean_page["receipt"] = {
+                "coin_var": re.sub(r"[^a-zA-Z0-9_]", "", str(rc.get("coin_var", "crypto")))[:30] or "crypto",
+                "coin_fixed": str(rc.get("coin_fixed", "") or "")[:10],
+                "amount_var": re.sub(r"[^a-zA-Z0-9_]", "", str(rc.get("amount_var", "amount")))[:30] or "amount",
+                "fiat_to_usd": float(rc.get("fiat_to_usd", 1.0) or 1.0),
+                "use_qr": bool(rc.get("use_qr", True)),
+                "request_id_var": re.sub(r"[^a-zA-Z0-9_]", "", str(rc.get("request_id_var", "request_id")))[:30] or "request_id",
+            }
+
+        clean_pages[pid] = clean_page
 
     return True, "", {
         "version": 1,

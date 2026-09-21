@@ -228,7 +228,18 @@ function renderEditor(){
       </div>
 
       <div class="form-group">
-        <label>Image</label>
+        <label>Page type</label>
+        <select class="cx-input" style="width:100%" onchange="setType(this.value)">
+          <option value="message" ${(page.type||'message')==='message'?'selected':''}>Message — image + text + buttons</option>
+          <option value="input"   ${page.type==='input'?'selected':''}>Input — ask the user to type something</option>
+          <option value="receipt" ${page.type==='receipt'?'selected':''}>Receipt — crypto payment (wallet + QR + amount)</option>
+        </select>
+      </div>
+
+      <div id="typeConfig"></div>
+
+      <div class="form-group">
+        <label>Image ${page.type==='receipt'?'(ignored when QR is on)':''}</label>
         <div style="display:flex;gap:6px;align-items:center;">
           <select class="cx-input" style="flex:1" id="pgImage" onchange="setImage(this.value)">${imgOptions}</select>
           <button class="cx-mini" onclick="document.getElementById('imgUpload').click()">Upload</button>
@@ -265,7 +276,90 @@ function renderEditor(){
         t.onclick = ()=>{ currentLang = l; renderEditor(); renderPreview(); renderLangTabsForPreview(); };
         elt.appendChild(t);
     });
+    renderTypeConfig();
     renderRows();
+}
+
+function renderTypeConfig(){
+    const page = config.pages[currentPage];
+    const box = document.getElementById("typeConfig");
+    if(!box) return;
+    const pageOpts = (sel)=> Object.keys(config.pages).map(p=>
+        `<option value="${esc(p)}" ${sel===p?"selected":""}>${esc(p)}</option>`).join("");
+
+    if(page.type==="input"){
+        const inp = page.input || (page.input={var:"amount",kind:"number",min:null,max:null,regex:"",error:{},next:""});
+        box.innerHTML = `
+          <div class="cx-row-box">
+            <div class="cx-row-head"><span class="lbl">Input settings</span></div>
+            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Save to variable</span>
+              <input class="cx-input" style="flex:1" value="${esc(inp.var||'')}" oninput="setInp('var',this.value)"></div>
+            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Kind</span>
+              <select class="cx-input" onchange="setInp('kind',this.value)">
+                <option value="number" ${inp.kind==='number'?'selected':''}>Number</option>
+                <option value="text" ${inp.kind!=='number'?'selected':''}>Text</option>
+              </select></div>
+            ${inp.kind==='number' ? `
+            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Min / Max</span>
+              <input class="cx-input" style="width:90px" type="number" value="${inp.min??''}" placeholder="min" oninput="setInp('min',this.value)">
+              <input class="cx-input" style="width:90px" type="number" value="${inp.max??''}" placeholder="max" oninput="setInp('max',this.value)"></div>` : `
+            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Regex (optional)</span>
+              <input class="cx-input" style="flex:1" value="${esc(inp.regex||'')}" oninput="setInp('regex',this.value)"></div>`}
+            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">On error (${currentLang.toUpperCase()})</span>
+              <input class="cx-input" style="flex:1" value="${esc(pickText(inp.error,currentLang))}" oninput="setInpErr(this.value)"></div>
+            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Next page →</span>
+              <select class="cx-input" style="flex:1" onchange="setInp('next',this.value)"><option value="">— pick —</option>${pageOpts(inp.next)}</select></div>
+          </div>`;
+    } else if(page.type==="receipt"){
+        const rc = page.receipt || (page.receipt={coin_var:"crypto",coin_fixed:"",amount_var:"amount",fiat_to_usd:1.0,use_qr:true,request_id_var:"request_id"});
+        box.innerHTML = `
+          <div class="cx-row-box">
+            <div class="cx-row-head"><span class="lbl">Receipt settings</span></div>
+            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Coin from variable</span>
+              <input class="cx-input" style="flex:1" value="${esc(rc.coin_var||'')}" placeholder="crypto" oninput="setRc('coin_var',this.value)"></div>
+            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">…or fixed coin</span>
+              <select class="cx-input" onchange="setRc('coin_fixed',this.value)">
+                <option value="" ${!rc.coin_fixed?'selected':''}>(use variable)</option>
+                <option value="BTC" ${rc.coin_fixed==='BTC'?'selected':''}>BTC</option>
+                <option value="LTC" ${rc.coin_fixed==='LTC'?'selected':''}>LTC</option>
+                <option value="USDT" ${rc.coin_fixed==='USDT'?'selected':''}>USDT</option>
+              </select></div>
+            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Amount from variable</span>
+              <input class="cx-input" style="flex:1" value="${esc(rc.amount_var||'')}" placeholder="amount" oninput="setRc('amount_var',this.value)"></div>
+            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Amount→USD rate</span>
+              <input class="cx-input" style="width:110px" type="number" step="0.0001" value="${rc.fiat_to_usd??1}" oninput="setRc('fiat_to_usd',this.value)">
+              <span style="color:var(--text2);font-size:11px;">1 = amount is USD · 0.37 ≈ GEL</span></div>
+            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Request-id variable</span>
+              <input class="cx-input" style="flex:1" value="${esc(rc.request_id_var||'request_id')}" oninput="setRc('request_id_var',this.value)"></div>
+            <div class="cx-line"><label style="cursor:pointer;font-size:13px;">
+              <input type="checkbox" ${rc.use_qr!==false?'checked':''} onchange="setRc('use_qr',this.checked)"> Show QR code as the image</label></div>
+            <div class="cx-help">Caption placeholders: {coin} {wallet} {crypto_amount} {amount} {usd_amount} {request_id}</div>
+          </div>`;
+    } else {
+        box.innerHTML = "";
+    }
+}
+
+function setType(t){
+    const p = config.pages[currentPage];
+    p.type = t;
+    if(t==="input" && !p.input) p.input={var:"amount",kind:"number",min:null,max:null,regex:"",error:{},next:""};
+    if(t==="receipt" && !p.receipt) p.receipt={coin_var:"crypto",coin_fixed:"",amount_var:"amount",fiat_to_usd:1.0,use_qr:true,request_id_var:"request_id"};
+    renderEditor(); renderPreview();
+}
+function setInp(k,v){
+    const inp = config.pages[currentPage].input;
+    if(k==='min'||k==='max') inp[k] = v===''? null : Number(v);
+    else inp[k]=v;
+    if(k==='kind') renderTypeConfig();
+    renderPreview();
+}
+function setInpErr(v){ const inp=config.pages[currentPage].input; ensureObj(inp,'error'); inp.error[currentLang]=v; }
+function setRc(k,v){
+    const rc = config.pages[currentPage].receipt;
+    if(k==='fiat_to_usd') rc[k]=Number(v)||0;
+    else rc[k]=v;
+    renderPreview();
 }
 
 function renderRows(){
@@ -296,33 +390,48 @@ function renderRows(){
 }
 
 function buttonCardHTML(btn, ri, bi, rowLen){
-    const [type, val] = parseAction(btn.action);
+    const a = parseAction(btn.action);
+    const pageOpts = (sel)=> Object.keys(config.pages).map(p=>
+        `<option value="${esc(p)}" ${sel===p?"selected":""}>${esc(p)}</option>`).join("");
     let target = "";
-    if(type==="page"){
-        let opts = "";
-        Object.keys(config.pages).forEach(p=>{ opts += `<option value="${esc(p)}" ${val===p?"selected":""}>${esc(p)}</option>`; });
-        target = `<select class="cx-input" onchange="setAction(${ri},${bi},'page',this.value)">${opts}</select>`;
-    } else if(type==="builtin"){
-        let opts = "";
-        BUILTINS.forEach(b=>{ opts += `<option value="${b.key}" ${val===b.key?"selected":""}>${b.label}</option>`; });
+    if(a.type==="page"){
+        target = `<select class="cx-input" onchange="setAction(${ri},${bi},'page',this.value)">${pageOpts(a.page)}</select>`;
+    } else if(a.type==="builtin"){
+        let opts = BUILTINS.map(b=>`<option value="${b.key}" ${a.value===b.key?"selected":""}>${b.label}</option>`).join("");
         target = `<select class="cx-input" onchange="setAction(${ri},${bi},'builtin',this.value)">${opts}</select>`;
-    } else if(type==="url"){
-        target = `<input class="cx-input" style="flex:1" value="${esc(val)}" placeholder="https://..."
+    } else if(a.type==="url"){
+        target = `<input class="cx-input" style="flex:1" value="${esc(a.url)}" placeholder="https://..."
                     oninput="setAction(${ri},${bi},'url',this.value)">`;
+    } else if(a.type==="confirm"){
+        target = `<select class="cx-input" onchange="setConfirm(${ri},${bi},this.value)">${pageOpts(a.page)}</select>`;
+    } else if(a.type==="choose"){
+        target = `<input class="cx-input" style="width:90px" value="${esc(a.var)}" placeholder="var" oninput="setChoose(${ri},${bi},'var',this.value)">
+                  <input class="cx-input" style="width:90px" value="${esc(a.value)}" placeholder="value" oninput="setChoose(${ri},${bi},'value',this.value)">
+                  <select class="cx-input" onchange="setChoose(${ri},${bi},'page',this.value)">${pageOpts(a.page)}</select>`;
     }
+    const style = btn.style || "";
     return `
       <div class="cx-btn-card">
         <div class="cx-line">
           <input class="cx-input" style="flex:1" placeholder="Button label (${currentLang.toUpperCase()})"
                  value="${esc(pickText(btn.label, currentLang))}"
                  oninput="setLabel(${ri},${bi},this.value)">
+          <select class="cx-input" title="color cue" onchange="setStyle(${ri},${bi},this.value)">
+            <option value="" ${style===""?"selected":""}>⚪</option>
+            <option value="green" ${style==="green"?"selected":""}>🟢</option>
+            <option value="red" ${style==="red"?"selected":""}>🔴</option>
+            <option value="check" ${style==="check"?"selected":""}>✅</option>
+            <option value="cross" ${style==="cross"?"selected":""}>❌</option>
+          </select>
         </div>
         <div class="cx-line">
           <select class="cx-input" onchange="setActionType(${ri},${bi},this.value)">
-            <option value="page"    ${type==="page"?"selected":""}>→ Page</option>
-            <option value="builtin" ${type==="builtin"?"selected":""}>⚙ Builtin</option>
-            <option value="url"     ${type==="url"?"selected":""}>🔗 URL</option>
-            <option value="noop"    ${type==="noop"?"selected":""}>∅ None</option>
+            <option value="page"    ${a.type==="page"?"selected":""}>→ Page</option>
+            <option value="choose"  ${a.type==="choose"?"selected":""}>☑ Set var + go</option>
+            <option value="confirm" ${a.type==="confirm"?"selected":""}>💸 I-paid + go</option>
+            <option value="builtin" ${a.type==="builtin"?"selected":""}>⚙ Builtin</option>
+            <option value="url"     ${a.type==="url"?"selected":""}>🔗 URL</option>
+            <option value="noop"    ${a.type==="noop"?"selected":""}>∅ None</option>
           </select>
           ${target}
         </div>
@@ -344,7 +453,7 @@ function renderPreview(){
     let kb = "";
     page.rows.forEach(row=>{
         let keys = "";
-        row.forEach(btn=>{ keys += `<div class="tg-key">${esc(pickText(btn.label, currentLang) || "·")}</div>`; });
+        row.forEach(btn=>{ const pre=STYLE_EMOJI[btn.style]||""; keys += `<div class="tg-key">${esc(pre+(pickText(btn.label, currentLang) || "·"))}</div>`; });
         if(keys) kb += `<div class="tg-kb-row">${keys}</div>`;
     });
     if(page.show_admin_button) kb += `<div class="tg-kb-row"><div class="tg-key">⚙ ადმინ პანელი</div></div>`;
@@ -362,7 +471,10 @@ function setLabel(ri,bi,v){ const b=config.pages[currentPage].rows[ri][bi]; ensu
 
 function setActionType(ri,bi,t){
     const b = config.pages[currentPage].rows[ri][bi];
-    if(t==="page") b.action = "page:"+(config.start_page||Object.keys(config.pages)[0]);
+    const fp = config.start_page||Object.keys(config.pages)[0];
+    if(t==="page") b.action = "page:"+fp;
+    else if(t==="choose") b.action = "choose:crypto:LTC:"+fp;
+    else if(t==="confirm") b.action = "confirm:"+fp;
     else if(t==="builtin") b.action = "builtin:"+BUILTINS[0].key;
     else if(t==="url") b.action = "url:https://";
     else b.action = "noop";
@@ -371,6 +483,22 @@ function setActionType(ri,bi,t){
 function setAction(ri,bi,t,val){
     const b = config.pages[currentPage].rows[ri][bi];
     b.action = t==="noop" ? "noop" : t+":"+val;
+    renderPreview();
+}
+function setConfirm(ri,bi,page){ config.pages[currentPage].rows[ri][bi].action = "confirm:"+page; renderPreview(); }
+function setChoose(ri,bi,field,val){
+    const b = config.pages[currentPage].rows[ri][bi];
+    const a = parseAction(b.action);
+    let v = a.var||"crypto", value = a.value||"LTC", page = a.page||(config.start_page||Object.keys(config.pages)[0]);
+    if(field==='var') v = val.replace(/[^a-zA-Z0-9_]/g,'');
+    if(field==='value') value = val.replace(/[^a-zA-Z0-9_.\-]/g,'');
+    if(field==='page') page = val;
+    b.action = "choose:"+(v||"crypto")+":"+(value||"x")+":"+page;
+    renderPreview();
+}
+function setStyle(ri,bi,v){
+    const b = config.pages[currentPage].rows[ri][bi];
+    if(v) b.style = v; else delete b.style;
     renderPreview();
 }
 
@@ -536,11 +664,15 @@ function pickText(field, lang){
 function ensureObj(o,k){ if(typeof o[k]!=="object"||o[k]==null){ const v=o[k]; o[k]={}; if(typeof v==="string") o[k][config.default_lang]=v; } }
 function parseAction(a){
     a=a||"noop";
-    if(a.startsWith("page:")) return ["page", a.slice(5)];
-    if(a.startsWith("builtin:")) return ["builtin", a.slice(8)];
-    if(a.startsWith("url:")) return ["url", a.slice(4)];
-    return ["noop",""];
+    if(a.startsWith("page:"))    return {type:"page", page:a.slice(5)};
+    if(a.startsWith("builtin:")) return {type:"builtin", value:a.slice(8)};
+    if(a.startsWith("url:"))     return {type:"url", url:a.slice(4)};
+    if(a.startsWith("confirm:")) return {type:"confirm", page:a.slice(8)};
+    if(a.startsWith("choose:")){ const p=a.split(":");
+        return {type:"choose", var:p[1]||"", value:p[2]||"", page:p.slice(3).join(":")||""}; }
+    return {type:"noop"};
 }
+const STYLE_EMOJI = {green:"🟢 ", red:"🔴 ", check:"✅ ", cross:"❌ "};
 function renderVars(t){
     return String(t||"").replace(/\{(\w+)\}/g, (m,k)=>({
         balance:"0", bot_username:"your_bot", user_id:"123456", referrals:"0", earned:"0.0"
