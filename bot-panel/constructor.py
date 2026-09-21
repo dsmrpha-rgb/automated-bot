@@ -46,8 +46,9 @@ _ACTION_RE = re.compile(
     r"|noop"
     r")$"
 )
-_PAGE_TYPES = {"message", "input", "receipt"}
+_PAGE_TYPES = {"message", "input", "receipt", "list"}
 _STYLES = {"green", "red", "check", "cross"}
+_SOURCES = {"products", "districts"}
 
 
 def _action_target_page(action: str) -> str | None:
@@ -219,6 +220,25 @@ def _validate_config(cfg: dict) -> tuple[bool, str, dict]:
                 "fiat_to_usd": float(rc.get("fiat_to_usd", 1.0) or 1.0),
                 "use_qr": bool(rc.get("use_qr", True)),
                 "request_id_var": re.sub(r"[^a-zA-Z0-9_]", "", str(rc.get("request_id_var", "request_id")))[:30] or "request_id",
+            }
+
+        if ptype == "list":
+            tgt = str(page.get("item_target", "") or "")
+            if tgt and tgt not in pages:
+                return False, f"page '{pid}': list target page '{tgt}' does not exist", {}
+            src = page.get("source", "products")
+            clean_page["source"] = src if src in _SOURCES else "products"
+            clean_page["city"] = re.sub(r"[^a-zA-Z0-9_]", "", str(page.get("city", "tbilisi")))[:30] or "tbilisi"
+            clean_page["item_var"] = re.sub(r"[^a-zA-Z0-9_]", "", str(page.get("item_var", "product")))[:30] or "product"
+            clean_page["item_target"] = tgt
+
+        # optional item lookup on any page (merges product/district fields into vars)
+        il = page.get("item_lookup")
+        if isinstance(il, dict) and il.get("source"):
+            clean_page["item_lookup"] = {
+                "source": il["source"] if il["source"] in _SOURCES else "products",
+                "city": re.sub(r"[^a-zA-Z0-9_]", "", str(il.get("city", "tbilisi")))[:30] or "tbilisi",
+                "var": re.sub(r"[^a-zA-Z0-9_]", "", str(il.get("var", "product")))[:30] or "product",
             }
 
         clean_pages[pid] = clean_page

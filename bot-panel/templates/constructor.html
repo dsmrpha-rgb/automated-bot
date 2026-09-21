@@ -231,6 +231,7 @@ function renderEditor(){
         <label>Page type</label>
         <select class="cx-input" style="width:100%" onchange="setType(this.value)">
           <option value="message" ${(page.type||'message')==='message'?'selected':''}>Message — image + text + buttons</option>
+          <option value="list"    ${page.type==='list'?'selected':''}>List — auto buttons from products / districts</option>
           <option value="input"   ${page.type==='input'?'selected':''}>Input — ask the user to type something</option>
           <option value="receipt" ${page.type==='receipt'?'selected':''}>Receipt — crypto payment (wallet + QR + amount)</option>
         </select>
@@ -335,9 +336,46 @@ function renderTypeConfig(){
               <input type="checkbox" ${rc.use_qr!==false?'checked':''} onchange="setRc('use_qr',this.checked)"> Show QR code as the image</label></div>
             <div class="cx-help">Caption placeholders: {coin} {wallet} {crypto_amount} {amount} {usd_amount} {request_id}</div>
           </div>`;
+    } else if(page.type==="list"){
+        box.innerHTML = `
+          <div class="cx-row-box">
+            <div class="cx-row-head"><span class="lbl">List settings</span></div>
+            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Source</span>
+              <select class="cx-input" onchange="setL('source',this.value)">
+                <option value="products" ${(page.source||'products')==='products'?'selected':''}>Products</option>
+                <option value="districts" ${page.source==='districts'?'selected':''}>Districts</option>
+              </select></div>
+            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">City</span>
+              <input class="cx-input" style="flex:1" value="${esc(page.city||'tbilisi')}" oninput="setL('city',this.value)"></div>
+            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Save slug to var</span>
+              <input class="cx-input" style="flex:1" value="${esc(page.item_var||'product')}" oninput="setL('item_var',this.value)"></div>
+            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Open page →</span>
+              <select class="cx-input" style="flex:1" onchange="setL('item_target',this.value)"><option value="">— pick —</option>${Object.keys(config.pages).map(p=>`<option value="${esc(p)}" ${page.item_target===p?'selected':''}>${esc(p)}</option>`).join("")}</select></div>
+            <div class="cx-help">One button per item is generated automatically. Static buttons below are appended after them.</div>
+          </div>` + itemLookupHTML(page);
     } else {
-        box.innerHTML = "";
+        box.innerHTML = itemLookupHTML(page);
     }
+}
+
+function itemLookupHTML(page){
+    const il = page.item_lookup || {source:"",var:"product",city:"tbilisi"};
+    const on = !!(page.item_lookup && page.item_lookup.source);
+    return `
+      <div class="cx-row-box">
+        <div class="cx-row-head"><span class="lbl">Item fields (for {name} {price} {description})</span>
+          <label style="font-size:12px;cursor:pointer;"><input type="checkbox" ${on?'checked':''} onchange="toggleIL(this.checked)"> use</label></div>
+        ${on ? `
+        <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">From</span>
+          <select class="cx-input" onchange="setIL('source',this.value)">
+            <option value="products" ${il.source==='products'?'selected':''}>Products</option>
+            <option value="districts" ${il.source==='districts'?'selected':''}>Districts</option>
+          </select></div>
+        <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Slug in variable</span>
+          <input class="cx-input" style="flex:1" value="${esc(il.var||'product')}" oninput="setIL('var',this.value)"></div>
+        <div class="cx-help">Loads the chosen item so this page's text can use {name} {price} {description}. A receipt after it can use {price} as the amount.</div>
+        ` : `<div class="cx-help">Turn on for a product/district detail page.</div>`}
+      </div>`;
 }
 
 function setType(t){
@@ -345,8 +383,17 @@ function setType(t){
     p.type = t;
     if(t==="input" && !p.input) p.input={var:"amount",kind:"number",min:null,max:null,regex:"",error:{},next:""};
     if(t==="receipt" && !p.receipt) p.receipt={coin_var:"crypto",coin_fixed:"",amount_var:"amount",fiat_to_usd:1.0,use_qr:true,request_id_var:"request_id"};
+    if(t==="list"){ if(!p.source) p.source="products"; if(!p.city) p.city="tbilisi"; if(!p.item_var) p.item_var="product"; if(!p.item_target) p.item_target=""; }
     renderEditor(); renderPreview();
 }
+function setL(k,v){ config.pages[currentPage][k]=v; renderPreview(); }
+function toggleIL(on){
+    const p=config.pages[currentPage];
+    if(on) p.item_lookup={source:"products",var:"product",city:"tbilisi"};
+    else delete p.item_lookup;
+    renderTypeConfig();
+}
+function setIL(k,v){ const p=config.pages[currentPage]; if(!p.item_lookup)p.item_lookup={source:"products",var:"product",city:"tbilisi"}; p.item_lookup[k]=v; }
 function setInp(k,v){
     const inp = config.pages[currentPage].input;
     if(k==='min'||k==='max') inp[k] = v===''? null : Number(v);
@@ -456,6 +503,7 @@ function renderPreview(){
         row.forEach(btn=>{ const pre=STYLE_EMOJI[btn.style]||""; keys += `<div class="tg-key">${esc(pre+(pickText(btn.label, currentLang) || "·"))}</div>`; });
         if(keys) kb += `<div class="tg-kb-row">${keys}</div>`;
     });
+    if(page.type==="list") kb = `<div class="tg-kb-row"><div class="tg-key">… ${esc(page.source||'products')} (auto from data)</div></div>` + kb;
     if(page.show_admin_button) kb += `<div class="tg-kb-row"><div class="tg-key">⚙ ადმინ პანელი</div></div>`;
     const photo = page.image
         ? `<img class="tg-photo" src="/bot/${BOT_NAME}/api/image/${encodeURIComponent(page.image)}" onerror="this.replaceWith(document.createTextNode(''))">`
