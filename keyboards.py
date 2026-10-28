@@ -120,14 +120,12 @@ def back_only_kb(lang: str = "ka") -> InlineKeyboardMarkup:
 
 def balance_kb(lang: str = "ka") -> InlineKeyboardMarkup:
     """Balance screen with crypto deposit options."""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="Bitcoin", callback_data="deposit:BTC"),
-            InlineKeyboardButton(text="Litecoin", callback_data="deposit:LTC"),
-        ],
-        [InlineKeyboardButton(text="USDT TRC20", callback_data="deposit:USDT")],
-        [InlineKeyboardButton(text=texts.t("BACK_BUTTON", lang), callback_data="menu:main")],
-    ])
+    import settings_store
+    coin_buttons = [InlineKeyboardButton(text=c["label"], callback_data=f"deposit:{c['code']}")
+                    for c in settings_store.coins()]
+    rows = [coin_buttons[i:i + 2] for i in range(0, len(coin_buttons), 2)]
+    rows.append([InlineKeyboardButton(text=texts.t("BACK_BUTTON", lang), callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def deposit_back_kb(crypto: str, lang: str = "ka") -> InlineKeyboardMarkup:

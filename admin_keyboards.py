@@ -5,18 +5,30 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 # ── Main admin menu ────────────────────────────────────────────────────
 
+ADMIN_MENU_ITEMS = [
+    ("products", "📦 პროდუქტები", "admin:products"),
+    ("districts", "🗺 უბნები", "admin:districts"),
+    ("broadcast", "📢 განცხადება", "admin:broadcast"),
+    ("dm", "✉ პირადი", "admin:dm"),
+    ("scheduled", "📅 დაგეგმილი", "admin:scheduled"),
+    ("private", "🔒 პირადი ლისტინგი", "admin:private"),
+    ("users", "👥 მომხმარებლები", "admin:users"),
+    ("stats", "📊 სტატისტიკა", "admin:stats"),
+]
+
+
 def admin_menu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📦 პროდუქტები", callback_data="admin:products"),
-         InlineKeyboardButton(text="🗺 უბნები", callback_data="admin:districts")],
-        [InlineKeyboardButton(text="📢 განცხადება", callback_data="admin:broadcast"),
-         InlineKeyboardButton(text="✉ პირადი", callback_data="admin:dm")],
-        [InlineKeyboardButton(text="📅 დაგეგმილი", callback_data="admin:scheduled")],
-        [InlineKeyboardButton(text="🔒 პირადი ლისტინგი", callback_data="admin:private")],
-        [InlineKeyboardButton(text="👥 მომხმარებლები", callback_data="admin:users"),
-         InlineKeyboardButton(text="📊 სტატისტიკა", callback_data="admin:stats")],
-        [InlineKeyboardButton(text="◀ მთავარი მენიუ", callback_data="menu:main")],
-    ])
+    """Admin menu; items switched off in the constructor (admin_menu.hidden) are left out."""
+    try:
+        import settings_store
+        hidden = settings_store.admin_hidden()
+    except Exception:
+        hidden = set()
+    buttons = [InlineKeyboardButton(text=label, callback_data=cb)
+               for key, label, cb in ADMIN_MENU_ITEMS if key not in hidden]
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton(text="◀ მთავარი მენიუ", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # ── Product management ─────────────────────────────────────────────────

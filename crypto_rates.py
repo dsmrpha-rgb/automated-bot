@@ -27,6 +27,36 @@ _FALLBACK_RATES = {
 }
 
 
+_BUILTIN_IDS = {
+    "BTC": "bitcoin", "LTC": "litecoin", "ETH": "ethereum", "TRX": "tron",
+    "TON": "the-open-network", "SOL": "solana", "DOGE": "dogecoin",
+    "XRP": "ripple", "BNB": "binancecoin", "BCH": "bitcoin-cash",
+}
+_BUILTIN_STABLE = {"USDT", "USDC", "DAI", "BUSD"}
+
+
+def _coin_ids() -> dict[str, str]:
+    import settings_store
+    ids = dict(_BUILTIN_IDS)
+    for c in settings_store.coins():
+        if c.get("cg_id"):
+            ids[c["code"]] = c["cg_id"]
+    return ids
+
+
+def _is_stable(coin: str) -> bool:
+    import settings_store
+    if coin in _BUILTIN_STABLE:
+        return True
+    return any(c["code"] == coin and c.get("stable") for c in settings_store.coins())
+
+
+def _custom_label(code: str) -> bool:
+    import settings_store
+    defaults = {c["code"]: c["label"] for c in settings_store.DEFAULT_COINS}
+    return any(c["code"] == code and c["label"] != defaults.get(code) for c in settings_store.coins())
+
+
 async def get_crypto_price_usd(coin: str) -> float:
     """
     Get the current USD price of 1 unit of the given crypto.
@@ -34,8 +64,8 @@ async def get_crypto_price_usd(coin: str) -> float:
     """
     coin = coin.upper()
 
-    # USDT is a stablecoin — always 1:1
-    if coin == "USDT":
+    # stablecoins are always 1:1
+    if _is_stable(coin):
         return 1.0
 
     # Check cache
@@ -62,11 +92,7 @@ async def get_crypto_price_usd(coin: str) -> float:
 
 async def _fetch_price_coingecko(coin: str) -> Optional[float]:
     """Fetch price from CoinGecko free API."""
-    coin_ids = {
-        "BTC": "bitcoin",
-        "LTC": "litecoin",
-    }
-    cg_id = coin_ids.get(coin)
+    cg_id = _coin_ids().get(coin)
     if not cg_id:
         return None
 
@@ -93,7 +119,7 @@ async def get_usd_to_crypto(coin: str, usd_amount: float) -> float:
     Example: get_usd_to_crypto("BTC", 65) -> 0.000928 (if BTC = $70,000)
     """
     coin = coin.upper()
-    if coin == "USDT":
+    if _is_stable(coin):
         return round(usd_amount, 2)  # 1:1, no conversion needed
 
     price_usd = await get_crypto_price_usd(coin)
@@ -106,17 +132,14 @@ async def get_rates_for_display(usd_amount: float) -> dict[str, dict]:
     """
     Get all crypto rates formatted for display in the order confirmation.
     Returns: {"BTC": {"amount": 0.000928, "label": "..."}, ...}
+    Coins and labels come from the constructor (payments.coins).
     """
+    import settings_store
     results = {}
-    for coin in ["BTC", "LTC", "USDT"]:
-        amount = await get_usd_to_crypto(coin, usd_amount)
-        labels = {
-            "BTC": "BTC გადახდისთვის",
-            "LTC": "LTC გადახდისთვის",
-            "USDT": "USDT TRC20 გადახდისთვის",
-        }
-        results[coin] = {
+    for c in settings_store.coins():
+        amount = await get_usd_to_crypto(c["code"], usd_amount)
+        results[c["code"]] = {
             "amount": amount,
-            "label": labels[coin],
+            "label": f"{c['label']} გადახდისთვის" if c["code"] in ("BTC", "LTC", "USDT") and not _custom_label(c["code"]) else c["label"],
         }
     return results

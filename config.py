@@ -32,6 +32,10 @@ CRYPTO_WALLETS = {
     "LTC": LTC_WALLET,
     "USDT": USDT_WALLET,
 }
+# Extra coins added in the constructor store their wallet as <CODE>_WALLET in .env
+for _k, _v in os.environ.items():
+    if _k.endswith("_WALLET") and _k[:-7].isalnum() and _k[:-7].upper() not in CRYPTO_WALLETS:
+        CRYPTO_WALLETS[_k[:-7].upper()] = _v.strip()
 
 _BASE_DIR = os.path.dirname(__file__)
 

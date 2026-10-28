@@ -21,7 +21,14 @@ Button actions (stored per button)
   confirm:<page>                  ping admins ("user paid"), then navigate
   builtin:<key>                   legacy delegate (products/balance/language)
   url:<https-url>                 open a URL
+  admin                           open the admin menu (admins only; hidden for others)
   noop                            do nothing
+
+Page hooks (page["on_enter"], all optional) run when a user reaches the page:
+  set_vars      {var: value}                 store session variables first
+  notify_admins "template"                   message every admin ({vars} allowed,
+                                             plus {username} {user_id})
+  send          [{text, image}, ...]         extra messages sent to the user
 
 Templating: captions and labels are `.format`-ed with the user's session
 variables plus {balance} {bot_username} {user_id} {referrals} {earned}.
@@ -163,6 +170,9 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> 
             action = str(btn.get("action", "noop"))
             if action.startswith("url:"):
                 built.append(InlineKeyboardButton(text=label, url=action[4:]))
+            elif action == "admin":
+                if uid in ADMIN_IDS:
+                    built.append(InlineKeyboardButton(text=label, callback_data=ADMIN_BUTTON_CB))
             elif action.startswith("builtin:"):
                 built.append(InlineKeyboardButton(text=label, callback_data=BUILTINS.get(action[8:], "noop")))
             elif action.startswith("page:") or action.startswith("choose:") or action.startswith("confirm:"):
@@ -275,6 +285,40 @@ async def _compute_receipt(page: dict, uid: int) -> tuple[str | None, dict]:
     return qr_path, dict(v)
 
 
+async def _run_on_enter(page: dict, uid: int, bot, target, lang: str, default_lang: str) -> None:
+    """Page hooks configured in the constructor (see module docstring)."""
+    hook = page.get("on_enter")
+    if not isinstance(hook, dict) or not hook:
+        return
+    v = _sess(uid)["vars"]
+    for k, val in (hook.get("set_vars") or {}).items():
+        v[str(k)] = val
+    ctx = await _context(uid, bot)
+    user = target.from_user
+    ctx["username"] = f"@{user.username}" if user.username else "no-username"
+    note = _pick(hook.get("notify_admins", ""), lang, default_lang)
+    if note:
+        text = _fmt(note, ctx)
+        for admin_id in ADMIN_IDS:
+            try:
+                await bot.send_message(admin_id, text)
+            except Exception:
+                pass
+    for extra in hook.get("send") or []:
+        if not isinstance(extra, dict):
+            continue
+        text = _fmt(_pick(extra.get("text", ""), lang, default_lang), ctx)
+        img = _image_path(extra.get("image", ""))
+        try:
+            if img:
+                await bot.send_photo(uid, FSInputFile(img), caption=text or None,
+                                     parse_mode=page.get("parse_mode") or None)
+            elif text:
+                await bot.send_message(uid, text, parse_mode=page.get("parse_mode") or None)
+        except Exception:
+            pass
+
+
 # ── rendering ────────────────────────────────────────────────────────────────
 async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     cfg = load_config()
@@ -304,6 +348,8 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     qr_override = None
     if ptype == "receipt":
         qr_override, _ = await _compute_receipt(page, uid)
+
+    await _run_on_enter(page, uid, bot, target, lang, default_lang)
 
     ctx = await _context(uid, bot)
     caption = _fmt(_pick(page.get("text", ""), lang, default_lang), ctx)

@@ -476,7 +476,15 @@ TRANSLATIONS = {
 
 
 def t(key: str, lang: str = "ka") -> str:
-    """Get a translated string. Falls back to Georgian."""
+    """Get a translated string. Falls back to Georgian. A text edited in the
+    constructor (menu_config.json -> strings) overrides the built-in one."""
+    try:
+        import settings_store
+        override = settings_store.string_override(key, lang)
+        if override is not None:
+            return override
+    except Exception:
+        pass
     val = TRANSLATIONS.get(lang, TRANSLATIONS["ka"]).get(key)
     if val is None:
         val = TRANSLATIONS["ka"].get(key, key)
