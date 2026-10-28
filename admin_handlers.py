@@ -103,7 +103,7 @@ async def products_list(call: CallbackQuery, state: FSMContext):
     await state.clear()
     products = ds.get_products()
     await call.message.edit_text(
-        "📦 პროდუქტების მართვა:",
+        "📦 პროდუქტების მართვა (🌐 გლობალური ლისტინგი):",
         reply_markup=akb.products_menu_kb(products),
     )
     await call.answer()

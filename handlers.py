@@ -75,9 +75,6 @@ async def on_start(message: Message) -> None:
 
 @router.callback_query(F.data == "menu:cities")
 async def on_cities(callback: CallbackQuery) -> None:
-    if ds.has_private_listing(callback.from_user.id):
-        await on_city_tbilisi(callback)   # private users skip city selection
-        return
     lang = _lang(callback.from_user.id)
     await callback.message.edit_caption(
         caption=texts.t("CHOOSE_CITY_TEXT", lang),
