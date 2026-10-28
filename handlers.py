@@ -75,6 +75,9 @@ async def on_start(message: Message) -> None:
 
 @router.callback_query(F.data == "menu:cities")
 async def on_cities(callback: CallbackQuery) -> None:
+    if ds.has_private_listing(callback.from_user.id):
+        await on_city_tbilisi(callback)   # private users skip city selection
+        return
     lang = _lang(callback.from_user.id)
     await callback.message.edit_caption(
         caption=texts.t("CHOOSE_CITY_TEXT", lang),
@@ -120,7 +123,7 @@ async def on_city_tbilisi(callback: CallbackQuery) -> None:
                 media=FSInputFile(LISTING_IMAGE_PATH),
                 caption=caption,
             ),
-            reply_markup=keyboards.tbilisi_products_kb(lang),
+            reply_markup=keyboards.tbilisi_products_kb(lang, user_id=callback.from_user.id),
         )
     else:
         try:
@@ -130,7 +133,7 @@ async def on_city_tbilisi(callback: CallbackQuery) -> None:
         await callback.message.answer_photo(
             photo=FSInputFile(LISTING_IMAGE_PATH),
             caption=caption,
-            reply_markup=keyboards.tbilisi_products_kb(lang),
+            reply_markup=keyboards.tbilisi_products_kb(lang, user_id=callback.from_user.id),
         )
     await callback.answer()
 
@@ -140,7 +143,10 @@ async def on_product_selected(callback: CallbackQuery) -> None:
     """Product tapped -> delete photo, show product details as text + district picker."""
     lang = _lang(callback.from_user.id)
     product_cb = callback.data
-    products = ds.get_products()
+    if not ds.product_allowed(callback.from_user.id, product_cb):
+        await callback.answer()
+        return
+    products = ds.get_products(all_products=True)
     product_info = products.get(product_cb, {})
     product_name = product_info.get("name", product_cb)
     description = product_info.get("description", "+AAA")
@@ -173,8 +179,11 @@ async def on_district_selected(callback: CallbackQuery) -> None:
     district_cb = parts[0]
     product_cb = parts[1] if len(parts) > 1 else ""
 
+    if not ds.product_allowed(callback.from_user.id, product_cb):
+        await callback.answer()
+        return
     districts = ds.get_districts()
-    products = ds.get_products()
+    products = ds.get_products(all_products=True)
     district_info = districts.get(district_cb, {})
     district_name = district_info.get("name", district_cb)
     district_img = district_info.get("image", "")
@@ -217,7 +226,10 @@ async def on_crypto_payment(callback: CallbackQuery) -> None:
     product_cb = parts[1] if len(parts) > 1 else ""
     district_cb = parts[2] if len(parts) > 2 else ""
 
-    products = ds.get_products()
+    if not ds.product_allowed(callback.from_user.id, product_cb):
+        await callback.answer()
+        return
+    products = ds.get_products(all_products=True)
     districts = ds.get_districts()
     product_info = products.get(product_cb, {})
     product_name = product_info.get("name", product_cb)

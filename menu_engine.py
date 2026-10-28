@@ -177,12 +177,12 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> 
 
 
 # ── catalog (products / districts) ───────────────────────────────────────────
-def _list_items(source: str, city: str) -> dict:
-    """Return {slug: item_dict} for a data-driven list."""
+def _list_items(source: str, city: str, uid: int | None = None) -> dict:
+    """Return {slug: item_dict} for a data-driven list (a user's private listing replaces the global one)."""
     try:
         if source == "districts":
             return ds.get_districts(city or "tbilisi")
-        return ds.get_products(city or "tbilisi")
+        return ds.get_products(city or "tbilisi", user_id=uid)
     except Exception:
         return {}
 
@@ -225,7 +225,7 @@ def _list_keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int
     item_var = page.get("item_var", "product")
     target = page.get("item_target", "main")
     rows: list[list[InlineKeyboardButton]] = []
-    for slug, item in _list_items(source, city).items():
+    for slug, item in _list_items(source, city, uid).items():
         rows.append([InlineKeyboardButton(
             text=str(item.get("name", slug)),
             callback_data=f"pick|{item_var}|{target}|{slug}",

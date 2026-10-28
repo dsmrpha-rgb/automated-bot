@@ -57,9 +57,69 @@ def _save(data: dict) -> None:
 
 # ── Products ───────────────────────────────────────────────────────────
 
-def get_products(city: str = "tbilisi") -> dict[str, dict]:
+def get_products(city: str = "tbilisi", user_id: int | None = None, all_products: bool = False) -> dict[str, dict]:
+    """Product list.
+
+    Default / city only: the GLOBAL listing (private products excluded).
+    user_id given: that user's private listing if they have one, else the global listing.
+    all_products=True: every product of the city incl. private ones (for lookups by slug).
+    """
     data = _load()
-    return {k: v for k, v in data["products"].items() if v.get("city") == city}
+    prods = data["products"]
+    if all_products:
+        return {k: v for k, v in prods.items() if v.get("city") == city}
+    if user_id is not None and str(user_id) in data.get("private_listings", {}):
+        return {k: v for k, v in prods.items() if v.get("owner") == user_id}
+    return {k: v for k, v in prods.items() if v.get("city") == city and v.get("owner") is None}
+
+
+# ── Private listings ───────────────────────────────────────────────────
+
+def has_private_listing(user_id: int) -> bool:
+    return str(user_id) in _load().get("private_listings", {})
+
+
+def create_private_listing(user_id: int) -> None:
+    data = _load()
+    data.setdefault("private_listings", {}).setdefault(
+        str(user_id), {"created": datetime.now().strftime("%Y-%m-%d %H:%M")})
+    _save(data)
+
+
+def delete_private_listing(user_id: int) -> None:
+    data = _load()
+    data.get("private_listings", {}).pop(str(user_id), None)
+    data["products"] = {k: v for k, v in data["products"].items() if v.get("owner") != user_id}
+    _save(data)
+
+
+def list_private_listings() -> list[dict]:
+    data = _load()
+    return [{"user_id": int(uid), "products": sum(1 for p in data["products"].values() if p.get("owner") == int(uid))}
+            for uid in data.get("private_listings", {})]
+
+
+def get_private_products(user_id: int) -> dict[str, dict]:
+    return {k: v for k, v in _load()["products"].items() if v.get("owner") == user_id}
+
+
+def set_product_owner(slug: str, user_id: int) -> None:
+    data = _load()
+    if slug in data["products"]:
+        data["products"][slug]["owner"] = user_id
+        _save(data)
+
+
+def product_allowed(user_id: int, slug: str) -> bool:
+    """Private products are visible only to their owner; users with a private listing see only theirs."""
+    data = _load()
+    p = data["products"].get(slug)
+    if p is None:
+        return False
+    owner = p.get("owner")
+    if owner is not None:
+        return owner == user_id
+    return str(user_id) not in data.get("private_listings", {})
 
 
 def add_product(slug: str, name: str, price_usd: float, description: str,

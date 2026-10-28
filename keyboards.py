@@ -42,9 +42,9 @@ def cities_kb(lang: str = "ka") -> InlineKeyboardMarkup:
     )
 
 
-def tbilisi_products_kb(lang: str = "ka") -> InlineKeyboardMarkup:
-    """Build product list dynamically from data store."""
-    products = ds.get_products("tbilisi")
+def tbilisi_products_kb(lang: str = "ka", user_id: int | None = None) -> InlineKeyboardMarkup:
+    """Build product list dynamically from data store (a user's private listing replaces the global one)."""
+    products = ds.get_products("tbilisi", user_id=user_id)
     rows = []
     for slug, info in products.items():
         rows.append([InlineKeyboardButton(text=info["name"], callback_data=slug)])

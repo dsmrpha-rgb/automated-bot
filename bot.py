@@ -10,6 +10,7 @@ from admin_handlers import router as admin_router, start_scheduler
 from data_store import seed_from_texts
 from deposit_monitor import start_deposit_monitor
 import bot_registry
+from ban_gate import install as install_ban_gate
 
 
 async def main() -> None:
@@ -38,6 +39,7 @@ async def main() -> None:
     logging.info("Starting polling for %d bot(s)...", len(bots))
 
     dp = Dispatcher()
+    install_ban_gate(dp)
     dp.include_router(admin_router)  # admin first so its callbacks take priority
     dp.include_router(router)
 

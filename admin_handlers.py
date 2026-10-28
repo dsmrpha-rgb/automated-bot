@@ -12,6 +12,7 @@ Features:
 """
 
 import asyncio
+import uuid
 import os
 import re
 from datetime import datetime, timedelta
@@ -38,6 +39,7 @@ from admin_states import (
     BroadcastFSM,
     EditProductFSM,
     PrivateDmFSM,
+    PrivateListingFSM,
     ScheduledAnnouncementFSM,
     SetBalanceFSM,
 )
@@ -104,6 +106,76 @@ async def products_list(call: CallbackQuery, state: FSMContext):
         "📦 პროდუქტების მართვა:",
         reply_markup=akb.products_menu_kb(products),
     )
+    await call.answer()
+
+
+# ── Private listings ───────────────────────────────────────────────────
+
+async def _private_view(target: Message, user_id: int) -> None:
+    products = ds.get_private_products(user_id)
+    lines = "\n".join(f"• {p['name']}" for p in products.values()) or "(ცარიელი — მომხმარებელი ცარიელ კატალოგს ხედავს)"
+    await target.answer(
+        f"🔒 პირადი ლისტინგი: {user_id}\n"
+        "ეს მომხმარებელი ხედავს მხოლოდ ამ პროდუქტებს გლობალური კატალოგის ნაცვლად.\n\n" + lines,
+        reply_markup=akb.private_view_kb(user_id, products),
+    )
+
+
+@router.callback_query(F.data == "admin:private")
+async def private_menu(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await state.clear()
+    await state.set_state(PrivateListingFSM.waiting_user_id)
+    await call.message.edit_text(
+        "🔒 პირადი ლისტინგი\n\nგამოგზავნეთ მომხმარებლის Telegram ID, ან აირჩიეთ არსებული:",
+        reply_markup=akb.private_list_kb(ds.list_private_listings()),
+    )
+    await call.answer()
+
+
+@router.message(PrivateListingFSM.waiting_user_id, F.text)
+async def private_user_id(message: Message, state: FSMContext):
+    if not _is_admin(message.from_user.id):
+        return
+    raw = message.text.strip()
+    if not raw.isdigit():
+        await message.answer("❌ გამოგზავნეთ რიცხვითი ID")
+        return
+    await state.clear()
+    ds.create_private_listing(int(raw))
+    await _private_view(message, int(raw))
+
+
+@router.callback_query(F.data.startswith("adm_priv_view:"))
+async def private_view(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await state.clear()
+    await _private_view(call.message, int(call.data.split(":", 1)[1]))
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("adm_priv_drop:"))
+async def private_drop(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    ds.delete_private_listing(int(call.data.split(":", 1)[1]))
+    await call.message.answer(
+        "🗑 ლისტინგი წაშლილია. მომხმარებელი ისევ გლობალურ კატალოგს ხედავს.",
+        reply_markup=akb.private_list_kb(ds.list_private_listings()),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("adm_priv_add:"))
+async def private_add_start(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await state.clear()
+    await state.update_data(private_uid=int(call.data.split(":", 1)[1]))
+    await call.message.answer("📦 ახალი პროდუქტის სახელი:")
+    await state.set_state(AddProductFSM.waiting_name)
     await call.answer()
 
 
@@ -181,12 +253,21 @@ async def add_product_qty(message: Message, state: FSMContext):
     name = data["name"]
     price = data["price"]
     desc = data.get("description", "")
-    slug = _slugify(name)
+    private_uid = data.get("private_uid")
+    # Private products get a short unique slug (callback_data is limited to 64 bytes).
+    slug = f"product:u{private_uid}_{uuid.uuid4().hex[:6]}" if private_uid else _slugify(name)
 
     # Build the button label: name + price only (quantity is internal, not shown to users)
     display_name = f"{name} {price}$"
 
     ds.add_product(slug, display_name, price, desc, qty)
+    if private_uid:
+        ds.set_product_owner(slug, private_uid)
+        await state.clear()
+        await message.answer(f"✅ დამატებულია პირად ლისტინგში:\n{display_name}\n\n"
+                             "უბნების მისანიჭებლად გახსენით პროდუქტი რედაქტირებისთვის.")
+        await _private_view(message, private_uid)
+        return
     await state.clear()
     await message.answer(
         f"✅ პროდუქტი დამატებულია:\n{display_name}",

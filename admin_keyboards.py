@@ -12,6 +12,7 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📢 განცხადება", callback_data="admin:broadcast"),
          InlineKeyboardButton(text="✉ პირადი", callback_data="admin:dm")],
         [InlineKeyboardButton(text="📅 დაგეგმილი", callback_data="admin:scheduled")],
+        [InlineKeyboardButton(text="🔒 პირადი ლისტინგი", callback_data="admin:private")],
         [InlineKeyboardButton(text="👥 მომხმარებლები", callback_data="admin:users"),
          InlineKeyboardButton(text="📊 სტატისტიკა", callback_data="admin:stats")],
         [InlineKeyboardButton(text="◀ მთავარი მენიუ", callback_data="menu:main")],
@@ -37,6 +38,26 @@ def products_menu_kb(products: dict) -> InlineKeyboardMarkup:
         ])
     rows.append([InlineKeyboardButton(text="➕ დამატება", callback_data="adm_prod_add")])
     rows.append([InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def private_list_kb(listings: list) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=f"👤 {l['user_id']} ({l['products']})", callback_data=f"adm_priv_view:{l['user_id']}")]
+            for l in listings]
+    rows.append([InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def private_view_kb(user_id: int, products: dict) -> InlineKeyboardMarkup:
+    rows = []
+    for slug, info in products.items():
+        rows.append([
+            InlineKeyboardButton(text=f"{info['name']} | {info['price_usd']}$", callback_data=f"adm_prod_edit:{slug}"),
+            InlineKeyboardButton(text="❌", callback_data=f"adm_prod_del:{slug}"),
+        ])
+    rows.append([InlineKeyboardButton(text="➕ პროდუქტის დამატება", callback_data=f"adm_priv_add:{user_id}")])
+    rows.append([InlineKeyboardButton(text="🗑 მთელი ლისტინგის წაშლა", callback_data=f"adm_priv_drop:{user_id}")])
+    rows.append([InlineKeyboardButton(text="◀ უკან", callback_data="admin:private")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

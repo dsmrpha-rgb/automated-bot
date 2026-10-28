@@ -11,6 +11,11 @@ class AddProductFSM(StatesGroup):
     waiting_quantity = State()
 
 
+class PrivateListingFSM(StatesGroup):
+    """Open/create a private listing by user ID."""
+    waiting_user_id = State()
+
+
 class EditProductFSM(StatesGroup):
     """Edit an existing product field."""
     waiting_field = State()      # which field to edit

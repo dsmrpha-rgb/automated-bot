@@ -20,6 +20,7 @@ from deposit_monitor import start_deposit_monitor
 from admin_handlers import router as admin_router, start_scheduler
 from menu_engine import engine_router
 import bot_registry
+from ban_gate import install as install_ban_gate
 
 # Reuse the dynamic leaf handlers from handlers.py WITHOUT their navigation
 # handlers (start / back / info screens) — the engine owns navigation.
@@ -61,6 +62,7 @@ async def main() -> None:
     logging.info("Starting polling for %d bot(s) [engine mode]...", len(bots))
 
     dp = Dispatcher()
+    install_ban_gate(dp)
     dp.include_router(admin_router)   # admin callbacks first
     dp.include_router(engine_router)  # config-driven navigation
     dp.include_router(leaf_router)    # reused dynamic leaves
