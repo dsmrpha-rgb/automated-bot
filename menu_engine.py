@@ -381,6 +381,43 @@ def _list_keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int
 
 
 # ── receipt computation ──────────────────────────────────────────────────────
+def _coin_code(value) -> str | None:
+    """Coin code for a remembered value: 'BTC', or a button text like 'Bitcoin' / 'USDT TRC20'."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip().upper()
+    coins = settings_store.coins()
+    for c in coins:
+        if text == c["code"]:
+            return c["code"]
+    for c in coins:
+        if text == c["label"].strip().upper():
+            return c["code"]
+    first = re.split(r"[\s:(\-]+", text)[0]
+    for c in coins:
+        if first == c["code"] or first == c["label"].strip().upper().split(" ")[0]:
+            return c["code"]
+    return None
+
+
+def _resolve_coin(v: dict, rc: dict) -> str:
+    """Which coin a payment screen is for: fixed, the configured variable, or - when no button
+    stored it there - the most recently remembered value that names an enabled coin."""
+    if rc.get("coin_fixed"):
+        return str(rc["coin_fixed"]).upper()
+    code = _coin_code(v.get(rc.get("coin_var", "crypto")))
+    if code:
+        return code
+    for key, val in reversed(list(v.items())):
+        if key == "coin":
+            continue
+        code = _coin_code(val)
+        if code:
+            return code
+    coins = settings_store.coins()
+    return coins[0]["code"] if coins else "BTC"
+
+
 async def _compute_receipt(page: dict, uid: int) -> tuple[str | None, dict]:
     """Fill session vars for a receipt page. Returns (qr_path_or_None, ctx)."""
     from config import CRYPTO_WALLETS
@@ -390,7 +427,7 @@ async def _compute_receipt(page: dict, uid: int) -> tuple[str | None, dict]:
     rc = page.get("receipt", {}) or {}
     v = _sess(uid)["vars"]
 
-    coin = (v.get(rc.get("coin_var", "crypto")) or rc.get("coin_fixed") or "BTC").upper()
+    coin = _resolve_coin(v, rc)
     amount = float(v.get(rc.get("amount_var", "amount"), 0) or 0)
     fiat_to_usd = float(rc.get("fiat_to_usd", 1.0))
     # amounts are in the bot's currency; refresh its live USD rate (no-op without a currency)
@@ -860,7 +897,9 @@ async def engine_choose(callback: CallbackQuery) -> None:
         await callback.answer(); return
     if value.startswith("@"):
         value = _pressed_label(callback, value[1:])
-    _sess(callback.from_user.id)["vars"][var] = value
+    v = _sess(callback.from_user.id)["vars"]
+    v.pop(var, None)          # re-insert so the newest choice is last (see _resolve_coin)
+    v[var] = value
     await render_page(callback, page)
     await callback.answer()
 
