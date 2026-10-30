@@ -10,7 +10,8 @@ List pages (type "list") — one button per item; picking stores the slug in ite
 opens item_target. Sources: products (category_var filters by a picked category),
 districts (product_var keeps only the districts of the picked product), categories,
 cities. city_var takes the city from a session variable instead of a fixed city.
-A page with image_from "district" shows the picture attached to the district the user picked
+In HTML/Markdown pages {wallet} is shown tap-to-copy automatically (monospace) — wrapping it in
+<code> yourself is fine too. A page with image_from "district" shows the picture attached to the district the user picked
 (Global Admin / bot admin menu), falling back to its own picture; on payment screens it replaces
 the QR code. Picked values are also readable as {city_name} {category_name} {product_name}
 {district_name} {product_price}; a "variant" variable is kept as typed.
@@ -49,6 +50,10 @@ channel), mode "dummy" lets anyone through after pressing the check button.
 
 History: a `history` page (or any caption containing {purchases}) lists the
 user's purchases, which admins record in the bot or in the Global Admin.
+
+Converted prices: {BTC_price} / {LTC_price} / {USDT_price} … in a text or button label show the
+picked product's price in that coin; {BTC_amount} … does the same for the amount the user typed
+(top-ups). Any coin enabled in the bot's payment settings works.
 
 Templating: captions and labels are `.format`-ed with the user's session
 variables plus {cities} {products_count} {purchase_count} {purchase_total} {balance} {bot_username} {user_id} {referrals} {earned}.
@@ -498,6 +503,8 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     parse_mode = page.get("parse_mode") or None
     if ptype == "history" or "{purchases" in raw_text:
         ctx.update(_history_ctx(page, uid, lang, default_lang, parse_mode))
+    raw_text = _wrap_wallet(raw_text, parse_mode)
+    await _crypto_ctx(page, raw_text, lang, default_lang, uid, ctx)
     caption = _fmt(raw_text, ctx)
     if ptype == "list":
         kb = _list_keyboard(page, lang, default_lang, ctx, uid)
@@ -575,6 +582,63 @@ async def _emit(message, caption, parse_mode, kb, img, *, is_start=False):
         _remember(await _send_media(message, kind, img, caption, parse_mode, kb), img)
     else:
         await message.answer(text=caption or " ", parse_mode=parse_mode, reply_markup=kb)
+
+
+# ── copiable wallet address ───────────────────────────────────────────────────
+_WALLET_HTML = re.compile(r"(<(?:code|pre)>\s*)?\{wallet\}(\s*</(?:code|pre)>)?", re.I)
+_WALLET_MD = re.compile(r"(`\s*)?\{wallet\}(\s*`)?")
+
+
+def _wrap_wallet(text: str, parse_mode) -> str:
+    """Make {wallet} tap-to-copy: monospace in HTML/Markdown, unless the text already does it."""
+    if "{wallet}" not in text:
+        return text
+    mode = str(parse_mode or "").lower()
+    if mode == "html":
+        return _WALLET_HTML.sub(lambda m: m.group(0) if (m.group(1) and m.group(2)) else "<code>{wallet}</code>", text)
+    if mode == "markdown":
+        return _WALLET_MD.sub(lambda m: m.group(0) if (m.group(1) and m.group(2)) else "`{wallet}`", text)
+    return text
+
+
+# ── converted prices ({BTC_price} {USDT_amount} …) ─────────────────────────────
+_CRYPTO_VAR = re.compile(r"\{([A-Z0-9]{2,10})_(price|amount)\}")
+
+
+def _crypto_text(coin: str, value: float) -> str:
+    from crypto_rates import _is_stable
+    if _is_stable(coin):
+        return f"{value:.2f}"
+    out = f"{value:.8f}".rstrip("0")
+    return out + "0" if out.endswith(".") else out
+
+
+async def _crypto_ctx(page: dict, raw_text: str, lang: str, default_lang: str, uid: int, ctx: dict) -> None:
+    """Fill {COIN_price} (the picked product's price) and {COIN_amount} (the number the user typed)
+    with the crypto equivalent, for every such placeholder used by this page's text or buttons."""
+    strings = [raw_text]
+    for row in page.get("rows", []):
+        for btn in row:
+            strings.append(_pick(btn.get("label", ""), lang, default_lang))
+    found = {m for s in strings for m in _CRYPTO_VAR.findall(s)}
+    if not found:
+        return
+    from crypto_rates import get_usd_to_crypto, refresh_fiat_rate
+    try:
+        await refresh_fiat_rate()
+    except Exception:
+        pass
+    allowed = {c["code"] for c in settings_store.coins()}
+    v = _sess(uid)["vars"]
+    rate = settings_store.usd_per_unit()
+    for coin, kind in found:
+        key = f"{coin}_{kind}"
+        base = (v.get("product_price") if v.get("product_price") is not None else v.get("price")) if kind == "price" else v.get("amount")
+        try:
+            usd = float(base) * rate
+            ctx[key] = _crypto_text(coin, await get_usd_to_crypto(coin, usd)) if coin in allowed and usd > 0 else "—"
+        except (TypeError, ValueError):
+            ctx[key] = "—"
 
 
 # ── purchase history ──────────────────────────────────────────────────────────
