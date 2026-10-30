@@ -1461,6 +1461,16 @@ async def purchase_note(message: Message, state: FSMContext):
     data = await state.get_data()
     note = "" if message.text.strip() == "-" else message.text.strip()
     pid = ds.add_purchase(data["pur_uid"], data["pur_product"], data["pur_price"], note, by="bot")
+    prog = settings_store.referral()       # the buyer's inviter earns a share of this purchase too
+    if prog:
+        res = ds.apply_referral_bonus(data["pur_uid"], data["pur_price"], prog["percent"])
+        if res:
+            import texts
+            try:
+                await message.bot.send_message(res[0], texts.t("REF_BONUS_NOTE", ds.get_user_lang(res[0]))
+                                               .format(amount=settings_store.fmt_money(res[1])))
+            except Exception:
+                pass
     await state.clear()
     await message.answer(
         f"✅ შესყიდვა #{pid} დაემატა\n{data['pur_uid']} · {data['pur_product']} · {settings_store.fmt_money(data['pur_price'])}",

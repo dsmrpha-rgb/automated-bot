@@ -61,7 +61,11 @@ picked product's price in that coin; {BTC_amount} … does the same for the amou
 (top-ups). Any coin enabled in the bot's payment settings works.
 
 Templating: captions and labels are `.format`-ed with the user's session
-variables plus {cities} {products_count} {purchase_count} {purchase_total} {balance} {bot_username} {user_id} {referrals} {earned}.
+variables plus {cities} {products_count} {purchase_count} {purchase_total} {balance} {bot_username} {user_id}
+{referrals} {earned} {ref_link} {ref_percent}.
+Referrals (config "referral": {enabled, percent}): {ref_link} is the user's invite link
+(https://t.me/<bot>?start=<user id>); a new user who starts the bot through it is linked to the inviter,
+who then earns {ref_percent}% of that user's purchases (balance buys and purchases recorded by admins).
 """
 from __future__ import annotations
 
@@ -220,12 +224,19 @@ async def _context(uid: int, bot) -> dict:
         for k, v in ds.get_counts().items():
             ctx.setdefault(k, v)
         mine = ds.get_user_purchases(uid)
-        ctx.setdefault("purchase_count", len(mine))
+        ctx.setdefault("purchase_count", len(mine) + len(_fake_for(uid) or []))
         ctx.setdefault("purchase_total", round(sum(float(x.get("price_usd", 0) or 0) for x in mine), 2))
     except Exception:
         pass
-    ctx.setdefault("referrals", 0)
-    ctx.setdefault("earned", 0.0)
+    try:
+        ctx.setdefault("referrals", ds.count_referrals(uid))
+        ctx.setdefault("earned", ds.get_ref_earned(uid))
+    except Exception:
+        ctx.setdefault("referrals", 0)
+        ctx.setdefault("earned", 0.0)
+    ctx.setdefault("ref_link", f"https://t.me/{ctx.get('bot_username', '')}?start={uid}")
+    pct = (settings_store.referral() or {}).get("percent", 0)
+    ctx.setdefault("ref_percent", f"{pct:g}")
     cur = settings_store.currency()
     if cur:   # money values read "25ლ" / "25.85ლ"; {name_num} keeps the plain number
         for key in _MONEY_VARS:
@@ -721,10 +732,69 @@ def _history_ctx(page: dict, uid: int, lang: str, default_lang: str, parse_mode)
         price = settings_store.format_amount(price, cur) if cur else (int(price) if float(price) == int(price) else price)
         out.append(_fmt(line, {"date": esc(p.get("date", "")), "product": esc(p.get("product", "")),
                                "price": price, "note": esc(p.get("note", "")), "id": p.get("id", "")}))
+    fake_cfg = _fake_cfg()
+    fake = _fake_for(uid) or []
+    if fake and fake_cfg:    # demo purchases: links to the products, after the real ones
+        fline = _pick(fake_cfg.get("line", ""), lang, default_lang) or _FAKE_LINE
+        for n, url in enumerate(fake, 1):
+            out.append(_fmt(fline, {"n": n, "link": esc(url), "url": esc(url), "product": esc(url),
+                                    "date": "", "price": "", "note": "", "id": ""}))
     if not out:
         out = [_pick(h.get("empty", ""), lang, default_lang) or _HIST_EMPTY.get(lang) or _HIST_EMPTY["en"]]
     total = round(sum(float(p.get("price_usd", 0) or 0) for p in items), 2)
-    return {"purchases": "\n".join(out), "purchase_count": len(items), "purchase_total": total}
+    return {"purchases": "\n".join(out), "purchase_count": len(items) + len(fake), "purchase_total": total}
+
+
+# ── demo balance ──────────────────────────────────────────────────────────────
+def _give_demo_balance(uid: int) -> None:
+    """Switch on in the constructor (Settings → Demo balance): a user who starts the bot gets a
+    random balance with decimals, e.g. 7.35 — whatever the currency. Decided once per user."""
+    demo = settings_store.demo_balance()
+    if not demo:
+        return
+    try:
+        amount = round(random.uniform(demo["min"], demo["max"]), 2)
+        for _ in range(8):      # prefer a real decimal (7.35) over a round number (7.0)
+            if amount != int(amount) or demo["max"] - demo["min"] < 1:
+                break
+            amount = round(random.uniform(demo["min"], demo["max"]), 2)
+        ds.give_demo_balance(uid, amount)
+    except Exception:
+        pass
+
+
+# ── demo purchases ────────────────────────────────────────────────────────────
+# Optional dummy feature (history page → history.fake): every user gets a random number of
+# "purchases" (1-3) shown as links on the purchase-history screen. Real purchases still register.
+_FAKE_LINE = "🛒 {n}. {link}"
+
+
+def _fake_cfg() -> dict | None:
+    for page in load_config().get("pages", {}).values():
+        fake = (page.get("history") or {}).get("fake") if page.get("type") == "history" else None
+        if isinstance(fake, dict) and fake.get("enabled") and fake.get("links"):
+            return fake
+    return None
+
+
+def _fake_for(uid: int) -> list[str] | None:
+    """The user's demo links (assigning a random 1-3 of them the first time); None when the switch is off."""
+    fake = _fake_cfg()
+    if not fake:
+        return None
+    links = [str(x) for x in fake.get("links", []) if str(x).startswith("http")]
+    if not links:
+        return None
+    try:
+        mine = ds.get_demo_purchases(uid)
+        if mine is None:
+            lo = max(1, int(fake.get("min", 1)))
+            hi = max(lo, min(int(fake.get("max", 3)), len(links)))
+            mine = random.sample(links, min(random.randint(lo, hi), len(links)))
+            ds.set_demo_purchases(uid, mine)
+        return [u for u in mine if u in links] or mine
+    except Exception:
+        return None
 
 
 # ── channel gate ──────────────────────────────────────────────────────────────
@@ -819,12 +889,22 @@ def install_gate(dp) -> None:
 @engine_router.message(CommandStart())
 async def engine_start(message: Message) -> None:
     cfg = load_config()
+    is_new = False
     try:
-        ds.register_user(message.from_user.id, message.from_user.username or "")
+        is_new = ds.register_user(message.from_user.id, message.from_user.username or "")
     except Exception:
         pass
     uid = message.from_user.id
+    if is_new and settings_store.referral():     # /start <inviter id>: remember who invited this user
+        payload = (message.text or "").split(maxsplit=1)
+        if len(payload) == 2 and payload[1].strip().isdigit():
+            try:
+                ds.set_referrer(uid, int(payload[1].strip()))
+            except Exception:
+                pass
     _sess(uid)["await"] = None  # reset any pending input
+    _give_demo_balance(uid)     # demo balance: a random amount, once (no-op when the switch is off)
+    _fake_for(uid)              # demo purchases: assign this user's random 1-3 (no-op when the switch is off)
     g = _gate_cfg()
     if g and uid not in ADMIN_IDS:
         if g.get("mode") == "dummy":
@@ -923,6 +1003,22 @@ async def engine_choose(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+async def _pay_referral_bonus(bot, uid: int, price: float) -> None:
+    """Referral programme: the user's inviter earns a percentage of every purchase."""
+    prog = settings_store.referral()
+    if not prog:
+        return
+    try:
+        res = ds.apply_referral_bonus(uid, price, prog["percent"])
+        if res:
+            import texts
+            ref_id, bonus = res
+            await bot.send_message(ref_id, texts.t("REF_BONUS_NOTE", _lang(ref_id, load_config()))
+                                   .format(amount=settings_store.format_amount(bonus)))
+    except Exception:
+        pass
+
+
 async def _send_delivery(bot, uid: int, product: dict) -> None:
     """Deliver what the buyer paid for: the product's delivery text and picture/GIF/video."""
     text = (product.get("delivery_text") or "").strip()
@@ -997,6 +1093,7 @@ async def engine_buy(callback: CallbackQuery) -> None:
         except Exception:
             pass
     v["price"] = price
+    await _pay_referral_bonus(callback.bot, uid, price)
     if ok_page:
         await render_page(callback, ok_page)
     await callback.answer()

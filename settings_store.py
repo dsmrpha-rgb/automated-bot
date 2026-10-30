@@ -51,6 +51,30 @@ def admin_hidden() -> set[str]:
     return {str(h) for h in hidden}
 
 
+def referral() -> dict | None:
+    """Referral programme switch (referral: {enabled, percent}) - None when off."""
+    r = cfg().get("referral")
+    if not isinstance(r, dict) or not r.get("enabled"):
+        return None
+    try:
+        pct = float(r.get("percent", 2))
+    except (TypeError, ValueError):
+        pct = 2.0
+    return {"percent": max(0.0, min(pct, 100.0))}
+
+
+def demo_balance() -> dict | None:
+    """Demo balance switch (demo_balance: {enabled, min, max}) - None when off."""
+    d = cfg().get("demo_balance")
+    if not isinstance(d, dict) or not d.get("enabled"):
+        return None
+    try:
+        lo, hi = float(d.get("min", 3)), float(d.get("max", 14))
+    except (TypeError, ValueError):
+        lo, hi = 3.0, 14.0
+    return {"min": min(lo, hi), "max": max(lo, hi)}
+
+
 def coins() -> list[dict]:
     """Payment coins offered to users (payments.coins), defaults BTC/LTC/USDT."""
     custom = (cfg().get("payments") or {}).get("coins")

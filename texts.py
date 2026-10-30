@@ -225,6 +225,7 @@ CRYPTO_PAYMENT_CAPTION = (
 
 TRANSLATIONS = {
     "ka": {
+        "REF_BONUS_NOTE": "🎁 რეფერალური ბონუსი: +{amount}",
         "BUY_NOT_ENOUGH": "💰 ბალანსი საკმარისი არ არის. აკლია: {shortage}",
         "BUY_OUT_OF_STOCK": "😕 პროდუქტი ამოიწურა",
         "BUY_NO_PRODUCT": "❌ ჯერ აირჩიეთ პროდუქტი",
@@ -270,6 +271,7 @@ TRANSLATIONS = {
         },
     },
     "ru": {
+        "REF_BONUS_NOTE": "🎁 Реферальный бонус: +{amount}",
         "BUY_NOT_ENOUGH": "💰 Недостаточно средств на балансе. Не хватает: {shortage}",
         "BUY_OUT_OF_STOCK": "😕 Товар закончился",
         "BUY_NO_PRODUCT": "❌ Сначала выберите товар",
@@ -376,6 +378,7 @@ TRANSLATIONS = {
         },
     },
     "en": {
+        "REF_BONUS_NOTE": "🎁 Referral bonus: +{amount}",
         "BUY_NOT_ENOUGH": "💰 Not enough balance. You are short by: {shortage}",
         "BUY_OUT_OF_STOCK": "😕 This product is out of stock",
         "BUY_NO_PRODUCT": "❌ Pick a product first",

@@ -331,6 +331,64 @@ def set_user_balance(user_id: int, amount: float) -> bool:
     return False
 
 
+# ── Referrals ──────────────────────────────────────────────────────────
+
+def set_referrer(user_id: int, referrer_id: int) -> bool:
+    """Remember who invited a (new) user. Ignored for self-invites, unknown inviters or already-invited users."""
+    if int(user_id) == int(referrer_id):
+        return False
+    data = _load()
+    u, r = data["users"].get(str(user_id)), data["users"].get(str(referrer_id))
+    if u is None or r is None or u.get("referrer"):
+        return False
+    u["referrer"] = int(referrer_id)
+    _save(data)
+    return True
+
+
+def count_referrals(user_id: int) -> int:
+    return sum(1 for u in _load()["users"].values() if u.get("referrer") == int(user_id))
+
+
+def get_ref_earned(user_id: int) -> float:
+    u = get_user(user_id)
+    return round(float(u.get("ref_earned", 0.0)), 2) if u else 0.0
+
+
+def apply_referral_bonus(user_id: int, price: float, percent: float) -> tuple[int, float] | None:
+    """Pay the inviter `percent` % of a purchase into their balance. Returns (inviter_id, bonus) or None."""
+    if percent <= 0 or price <= 0:
+        return None
+    data = _load()
+    u = data["users"].get(str(user_id))
+    ref = u.get("referrer") if u else None
+    r = data["users"].get(str(ref)) if ref else None
+    if r is None:
+        return None
+    bonus = round(float(price) * float(percent) / 100.0, 2)
+    if bonus <= 0:
+        return None
+    r["balance"] = round(float(r.get("balance", 0.0)) + bonus, 2)
+    r["ref_earned"] = round(float(r.get("ref_earned", 0.0)) + bonus, 2)
+    _save(data)
+    return int(ref), bonus
+
+
+def give_demo_balance(user_id: int, amount: float) -> bool:
+    """One-time demo balance: only if the user was never given one and has no money yet."""
+    data = _load()
+    u = data["users"].get(str(user_id))
+    if u is None or u.get("demo_balance"):
+        return False
+    u["demo_balance"] = True              # flagged either way, so it is decided exactly once
+    if float(u.get("balance", 0.0)) == 0.0:
+        u["balance"] = round(float(amount), 2)
+        _save(data)
+        return True
+    _save(data)
+    return False
+
+
 def deduct_balance(user_id: int, amount: float) -> bool:
     """Take `amount` from the balance if there is enough (all-or-nothing). True when charged."""
     data = _load()
@@ -393,6 +451,21 @@ def get_user_purchases(user_id: int, limit: int | None = None) -> list[dict]:
     items = [p for p in _load().get("purchases", []) if p.get("user_id") == int(user_id)]
     items.sort(key=lambda p: p.get("id", 0), reverse=True)
     return items[:limit] if limit else items
+
+
+def get_demo_purchases(user_id: int) -> list[str] | None:
+    """Demo purchase links assigned to a user (None = not assigned yet)."""
+    u = get_user(user_id)
+    val = u.get("demo_purchases") if u else None
+    return list(val) if isinstance(val, list) else None
+
+
+def set_demo_purchases(user_id: int, links: list[str]) -> None:
+    data = _load()
+    u = data["users"].get(str(user_id))
+    if u is not None:
+        u["demo_purchases"] = list(links)
+        _save(data)
 
 
 def delete_purchase(purchase_id: int) -> bool:
