@@ -1,12 +1,13 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 import data_store as ds
+import settings_store
 import texts
 from config import ADMIN_IDS
 
 
 def main_menu_kb(user_id: int = 0, lang: str = "ka", balance: float = 0.0) -> InlineKeyboardMarkup:
-    balance_text = texts.t("BALANCE_BUTTON", lang).format(balance=balance)
+    balance_text = texts.t("BALANCE_BUTTON", lang).format(balance=settings_store.num(balance))
     rows = [
         [
             InlineKeyboardButton(text=texts.t("CITIES_BUTTON", lang), callback_data="menu:cities"),

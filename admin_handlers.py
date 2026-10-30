@@ -32,9 +32,12 @@ from aiogram.types import CallbackQuery, FSInputFile, Message
 import admin_keyboards as akb
 import bot_registry
 import data_store as ds
+import settings_store
 from admin_states import (
+    AddCategoryFSM,
     AddDistrictFSM,
     AddProductFSM,
+    DistrictImageFSM,
     BanUserFSM,
     BroadcastFSM,
     EditProductFSM,
@@ -209,7 +212,7 @@ async def add_product_cmd(message: Message, state: FSMContext):
 async def add_product_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
     await message.answer(
-        "💰 ფასი დოლარში (მხოლოდ რიცხვი):\n(მაგ: 150)",
+        f"💰 ფასი ({settings_store.currency()['code'] if settings_store.currency() else 'USD'}, მხოლოდ რიცხვი):\n(მაგ: 150)",
         reply_markup=akb.admin_back_kb("admin:products"),
     )
     await state.set_state(AddProductFSM.waiting_price)
@@ -259,7 +262,7 @@ async def add_product_qty(message: Message, state: FSMContext):
     slug = f"product:u{private_uid}_{uuid.uuid4().hex[:6]}" if private_uid else _slugify(name)
 
     # Build the button label: name + price only (quantity is internal, not shown to users)
-    display_name = f"{name} {price}$"
+    display_name = f"{name} {settings_store.fmt_money(price)}"
 
     ds.add_product(slug, display_name, price, desc, qty)
     if private_uid:
@@ -292,10 +295,11 @@ async def edit_product_menu(call: CallbackQuery, state: FSMContext):
     await call.message.edit_text(
         f"✏ პროდუქტის რედაქტირება:\n\n"
         f"სახელი: {product['name']}\n"
-        f"ფასი: {product['price_usd']}$\n"
+        f"ფასი: {settings_store.fmt_money(product['price_usd'])}\n"
         f"აღწერა: {product.get('description', '-')}\n"
         f"რაოდენობა: {'∞' if product['quantity'] == -1 else product['quantity']}\n"
-        f"🗺 უბნები: {assigned_count} მინიჭებული",
+        f"🗺 უბნები: {assigned_count} მინიჭებული\n"
+        f"🗂 კატეგორია: {(ds.get_categories().get(product.get('category', ''), {}) or {}).get('name', '—')}",
         reply_markup=akb.product_edit_kb(slug),
     )
     await call.answer()
@@ -481,11 +485,52 @@ async def add_district_name(message: Message, state: FSMContext):
     await state.set_state(AddDistrictFSM.waiting_image)
 
 
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm", ".m4v")
+
+
+async def _save_district_media(message: Message, slug: str) -> str | None:
+    """Download a photo/GIF/video the admin sent into the bot folder; returns its file name."""
+    if message.photo:
+        file_id, ext = message.photo[-1].file_id, ".jpg"
+    elif message.animation:
+        file_id, ext = message.animation.file_id, ".mp4"
+    elif message.video:
+        file_id, ext = message.video.file_id, ".mp4"
+    else:
+        return None
+    name = f"district_{re.sub(r'[^a-z0-9]', '', slug.lower())[-12:]}_{uuid.uuid4().hex[:6]}{ext}"
+    await message.bot.download(file_id, destination=os.path.join(_BASE_DIR, name))
+    return name
+
+
+def _typed_district_image(text: str) -> str | None:
+    """'-' = none, an existing bare file name in the bot folder = that file, anything else = invalid."""
+    text = text.strip()
+    if text == "-":
+        return ""
+    if (os.path.basename(text) == text and text.lower().endswith(_IMG_EXTS)
+            and os.path.isfile(os.path.join(_BASE_DIR, text))):
+        return text
+    return None
+
+
+@router.message(AddDistrictFSM.waiting_image, F.photo | F.animation | F.video)
+async def add_district_image_media(message: Message, state: FSMContext):
+    data = await state.get_data()
+    image = await _save_district_media(message, data["dist_slug"]) or ""
+    ds.add_district(data["dist_slug"], data["dist_name"], image=image)
+    await state.clear()
+    await message.answer(f"✅ უბანი დამატებულია: {data['dist_name']}\n🖼 სურათი: {image}",
+                         reply_markup=akb.admin_back_kb("admin:districts"))
+
+
 @router.message(AddDistrictFSM.waiting_image, F.text)
 async def add_district_image(message: Message, state: FSMContext):
-    image = message.text.strip()
-    if image == "-":
-        image = ""
+    image = _typed_district_image(message.text)
+    if image is None:
+        await message.answer("❌ გამოაგზავნეთ ფოტო, არსებული ფაილის სახელი ან „-“:")
+        return
     data = await state.get_data()
     ds.add_district(data["dist_slug"], data["dist_name"], image=image)
     await state.clear()
@@ -494,6 +539,56 @@ async def add_district_image(message: Message, state: FSMContext):
         f"✅ უბანი დამატებულია: {data['dist_name']}{img_text}",
         reply_markup=akb.admin_back_kb("admin:districts"),
     )
+
+
+@router.callback_query(F.data.startswith("adm_dist_img:"))
+async def district_image_start(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    slug = call.data.split(":", 1)[1]
+    district = ds.get_districts().get(slug) or ds._load().get("districts", {}).get(slug)
+    if not district:
+        await call.answer("❌", show_alert=True)
+        return
+    now = district.get("image") or "—"
+    await state.update_data(img_slug=slug)
+    await state.set_state(DistrictImageFSM.waiting_image)
+    await call.message.answer(
+        f"🖼 {district['name']}\nამჟამინდელი: {now}\n\n"
+        "გამოაგზავნეთ ფოტო / GIF / ვიდეო, ან არსებული ფაილის სახელი.\n„-“ — სურათის წასაშლელად.",
+        reply_markup=akb.admin_back_kb("admin:districts"),
+    )
+    await call.answer()
+
+
+async def _finish_district_image(message: Message, state: FSMContext, image: str):
+    data = await state.get_data()
+    slug = data.get("img_slug", "")
+    ok = False
+    d = ds._load()
+    if slug in d.get("districts", {}):
+        d["districts"][slug]["image"] = image
+        ds._save(d)
+        ok = True
+    await state.clear()
+    await message.answer("✅ სურათი განახლდა" if ok else "❌ უბანი ვერ მოიძებნა",
+                         reply_markup=akb.districts_menu_kb(ds.get_districts()))
+
+
+@router.message(DistrictImageFSM.waiting_image, F.photo | F.animation | F.video)
+async def district_image_media(message: Message, state: FSMContext):
+    data = await state.get_data()
+    image = await _save_district_media(message, data.get("img_slug", "district"))
+    await _finish_district_image(message, state, image or "")
+
+
+@router.message(DistrictImageFSM.waiting_image, F.text)
+async def district_image_text(message: Message, state: FSMContext):
+    image = _typed_district_image(message.text)
+    if image is None:
+        await message.answer("❌ ასეთი ფაილი ვერ მოიძებნა. გამოაგზავნეთ ფოტო, ფაილის სახელი ან „-“:")
+        return
+    await _finish_district_image(message, state, image)
 
 
 @router.callback_query(F.data.startswith("adm_dist_del:"))
@@ -1058,7 +1153,7 @@ async def set_balance_user_id(message: Message, state: FSMContext):
     await state.update_data(balance_user_id=target_id)
     await message.answer(
         f"💰 მომხმარებელი: {target_id}\n"
-        f"მიმდინარე ბალანსი: {current_balance} $\n\n"
+        f"მიმდინარე ბალანსი: {settings_store.fmt_money(current_balance)}\n\n"
         f"შეიყვანეთ ახალი ბალანსი (რიცხვი):",
         reply_markup=akb.admin_back_kb("admin:users"),
     )
@@ -1080,17 +1175,17 @@ async def set_balance_amount(message: Message, state: FSMContext):
         await message.answer(
             f"✅ ბალანსი განახლებულია!\n\n"
             f"მომხმარებელი: {target_id}\n"
-            f"ახალი ბალანსი: {amount} $",
+            f"ახალი ბალანსი: {settings_store.fmt_money(amount)}",
             reply_markup=akb.admin_back_kb("admin:users"),
         )
         # Notify the user naturally
         lang = ds.get_user_lang(target_id)
         if lang == "ru":
-            note = f"💰 Ваш баланс обновлён: {amount} $"
+            note = f"💰 Ваш баланс обновлён: {settings_store.fmt_money(amount)}"
         elif lang == "en":
-            note = f"💰 Your balance has been updated: {amount} $"
+            note = f"💰 Your balance has been updated: {settings_store.fmt_money(amount)}"
         else:
-            note = f"💰 თქვენი ბალანსი განახლდა: {amount} $"
+            note = f"💰 თქვენი ბალანსი განახლდა: {settings_store.fmt_money(amount)}"
         await bot_registry.send_message_all_bots(chat_id=target_id, text=note)
     else:
         await message.answer(
@@ -1098,6 +1193,130 @@ async def set_balance_amount(message: Message, state: FSMContext):
             reply_markup=akb.admin_back_kb("admin:users"),
         )
     await state.clear()
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  CURRENCY
+# ══════════════════════════════════════════════════════════════════════
+
+def _currency_text() -> str:
+    cur = settings_store.currency()
+    now = f"{cur['symbol']} ({cur['code']})" if cur else "არ არის დაყენებული (USD $)"
+    return (f"💱 ვალუტა: {now}\n\n"
+            f"ფასები, ბალანსი და თანხები ამ ვალუტაში ჩანს; კრიპტოში გადაყვანა ავტომატურად ხდება.\n"
+            f"⚠ არსებული ფასები და ბალანსები არ გადაითვლება — მხოლოდ სიმბოლო იცვლება.")
+
+
+@router.callback_query(F.data == "admin:currency")
+async def currency_menu(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await state.clear()
+    await call.message.answer(_currency_text(), reply_markup=akb.currency_menu_kb())
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("adm_cur:"))
+async def currency_set(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    code = call.data.split(":", 1)[1]
+    symbol = dict(settings_store.CURRENCY_PRESETS).get(code)
+    if not symbol:
+        await call.answer()
+        return
+    settings_store.set_currency(code, symbol, "after", False, "auto")
+    await call.message.edit_text(_currency_text(), reply_markup=akb.currency_menu_kb())
+    await call.answer("✅")
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  CATEGORIES  (city → category → listing flow)
+# ══════════════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "admin:categories")
+async def categories_list(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await state.clear()
+    await call.message.answer("🗂 კატეგორიების მართვა:", reply_markup=akb.categories_menu_kb(ds.get_categories()))
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.answer()
+
+
+@router.callback_query(F.data == "adm_cat_add")
+async def category_add_start(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await call.message.answer("🗂 შეიყვანეთ კატეგორიის სახელი:", reply_markup=akb.admin_back_kb("admin:categories"))
+    await state.set_state(AddCategoryFSM.waiting_name)
+    await call.answer()
+
+
+@router.message(AddCategoryFSM.waiting_name, F.text)
+async def category_add_name(message: Message, state: FSMContext):
+    await state.update_data(cat_name=message.text.strip()[:60])
+    await message.answer("🏙 ქალაქი (მაგ. tbilisi) — ან გაგზავნეთ „-“ ყველა ქალაქისთვის:")
+    await state.set_state(AddCategoryFSM.waiting_city)
+
+
+@router.message(AddCategoryFSM.waiting_city, F.text)
+async def category_add_city(message: Message, state: FSMContext):
+    data = await state.get_data()
+    city = "" if message.text.strip() == "-" else re.sub(r"[^a-z0-9_]", "", message.text.strip().lower())
+    slug = "category:" + uuid.uuid4().hex[:6]
+    ds.add_category(slug, data["cat_name"], city)
+    await state.clear()
+    await message.answer(f"✅ კატეგორია „{data['cat_name']}“ დაემატა",
+                         reply_markup=akb.categories_menu_kb(ds.get_categories()))
+
+
+@router.callback_query(F.data.startswith("adm_cat_del:"))
+async def category_delete(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    ds.delete_category(call.data.split(":", 1)[1])
+    await call.message.edit_text("🗂 კატეგორიების მართვა:", reply_markup=akb.categories_menu_kb(ds.get_categories()))
+    await call.answer("🗑")
+
+
+@router.callback_query(F.data.startswith("adm_pcat:"))
+async def product_category_menu(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    slug = call.data.split(":", 1)[1]
+    product = ds.get_product(slug)
+    if not product:
+        await call.answer("❌", show_alert=True)
+        return
+    cats = ds.get_categories()
+    await call.message.edit_text(
+        "🗂 აირჩიეთ კატეგორია:" if cats else "🗂 კატეგორიები ჯერ არ არის — დაამატეთ ადმინ მენიუში.",
+        reply_markup=akb.product_category_kb(slug, cats, product.get("category", "")),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("adm_pcs:"))
+async def product_category_set(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    idx, slug = call.data.split(":", 1)[1].split("|", 1)
+    cats = list(ds.get_categories())
+    cat = "" if idx == "-" else (cats[int(idx)] if idx.isdigit() and int(idx) < len(cats) else "")
+    ds.update_product(slug, category=cat)
+    await call.message.edit_text(
+        "🗂 აირჩიეთ კატეგორია:",
+        reply_markup=akb.product_category_kb(slug, ds.get_categories(), cat),
+    )
+    await call.answer("✅")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1109,7 +1328,7 @@ def _purchases_text(user_id: int, items: list) -> str:
         return f"🧾 მომხმარებელი {user_id}: შესყიდვები არ არის"
     lines = [f"🧾 მომხმარებელი {user_id} — {len(items)} შესყიდვა"]
     for p in items[:20]:
-        lines.append(f"#{p['id']} · {p['date']} · {p['product']} · {p['price_usd']}$")
+        lines.append(f"#{p['id']} · {p['date']} · {p['product']} · {settings_store.fmt_money(p['price_usd'])}")
     return "\n".join(lines)
 
 
@@ -1154,7 +1373,7 @@ async def purchase_user_id(message: Message, state: FSMContext):
 @router.message(PurchaseFSM.waiting_product, F.text)
 async def purchase_product(message: Message, state: FSMContext):
     await state.update_data(pur_product=message.text.strip()[:200])
-    await message.answer("💰 ფასი ($):")
+    await message.answer(f"💰 ფასი ({settings_store.money_symbol()}):")
     await state.set_state(PurchaseFSM.waiting_price)
 
 
@@ -1177,7 +1396,7 @@ async def purchase_note(message: Message, state: FSMContext):
     pid = ds.add_purchase(data["pur_uid"], data["pur_product"], data["pur_price"], note, by="bot")
     await state.clear()
     await message.answer(
-        f"✅ შესყიდვა #{pid} დაემატა\n{data['pur_uid']} · {data['pur_product']} · {data['pur_price']}$",
+        f"✅ შესყიდვა #{pid} დაემატა\n{data['pur_uid']} · {data['pur_product']} · {settings_store.fmt_money(data['pur_price'])}",
         reply_markup=akb.purchases_menu_kb(),
     )
 
@@ -1228,7 +1447,7 @@ async def stats_dashboard(call: CallbackQuery):
         f"📦 პროდუქტები: {stats['product_count']}\n"
         f"🗺 უბნები: {stats['district_count']}\n\n"
         f"🛒 შეკვეთები: {stats['total_orders']}\n"
-        f"💰 შემოსავალი: {stats['total_revenue_usd']}$\n\n"
+        f"💰 შემოსავალი: {settings_store.fmt_money(stats['total_revenue_usd'])}\n\n"
         f"📅 დაგეგმილი განცხადებები: {stats['scheduled_announcements']}"
     )
     await call.message.edit_text(text, reply_markup=akb.stats_back_kb())
@@ -1247,7 +1466,7 @@ async def stats_cmd(message: Message):
         f"📦 პროდუქტები: {stats['product_count']}\n"
         f"🗺 უბნები: {stats['district_count']}\n\n"
         f"🛒 შეკვეთები: {stats['total_orders']}\n"
-        f"💰 შემოსავალი: {stats['total_revenue_usd']}$\n\n"
+        f"💰 შემოსავალი: {settings_store.fmt_money(stats['total_revenue_usd'])}\n\n"
         f"📅 დაგეგმილი განცხადებები: {stats['scheduled_announcements']}"
     )
     await message.answer(text, reply_markup=akb.stats_back_kb())

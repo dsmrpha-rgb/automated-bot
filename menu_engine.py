@@ -6,6 +6,15 @@ Turns menu_config.json into the ENTIRE user-facing bot: pages, captions
 dynamic crypto top-up receipts — all editable from the Bot Panel constructor
 without touching code.
 
+List pages (type "list") — one button per item; picking stores the slug in item_var and
+opens item_target. Sources: products (category_var filters by a picked category),
+districts (product_var keeps only the districts of the picked product), categories,
+cities. city_var takes the city from a session variable instead of a fixed city.
+A page with image_from "district" shows the picture attached to the district the user picked
+(Global Admin / bot admin menu), falling back to its own picture; on payment screens it replaces
+the QR code. Picked values are also readable as {city_name} {category_name} {product_name}
+{district_name} {product_price}; a "variant" variable is kept as typed.
+
 Page types
 ----------
   message  (default) — image + caption + buttons.
@@ -18,6 +27,7 @@ Button actions (stored per button)
 ----------------------------------
   page:<id>                       navigate to a config page
   choose:<var>:<value>:<page>     set a session var, then navigate
+                                  (value "@" = the pressed button's own label)
   confirm:<page>                  ping admins ("user paid"), then navigate
   builtin:<key>                   legacy delegate (products/balance/language)
   url:<https-url>                 open a URL
@@ -41,7 +51,7 @@ History: a `history` page (or any caption containing {purchases}) lists the
 user's purchases, which admins record in the bot or in the Global Admin.
 
 Templating: captions and labels are `.format`-ed with the user's session
-variables plus {balance} {bot_username} {user_id} {referrals} {earned}.
+variables plus {cities} {products_count} {purchase_count} {purchase_total} {balance} {bot_username} {user_id} {referrals} {earned}.
 """
 from __future__ import annotations
 
@@ -67,6 +77,7 @@ from aiogram.types import (
 )
 
 import data_store as ds
+import settings_store
 from config import ADMIN_IDS
 
 _BASE_DIR = os.path.dirname(__file__)
@@ -82,6 +93,9 @@ BUILTINS: dict[str, str] = {
     "balance": "menu:balance",
     "language": "menu:language",
 }
+
+# values shown with the bot's currency symbol once a currency is configured
+_MONEY_VARS = ("balance", "price", "product_price", "amount", "purchase_total", "earned")
 
 ADMIN_BUTTON_TEXT = "⚙ ადმინ პანელი"
 ADMIN_BUTTON_CB = "admin:menu"
@@ -192,8 +206,22 @@ async def _context(uid: int, bot) -> dict:
         ctx.setdefault("bot_username", me.username or "")
     except Exception:
         ctx.setdefault("bot_username", "")
+    try:
+        for k, v in ds.get_counts().items():
+            ctx.setdefault(k, v)
+        mine = ds.get_user_purchases(uid)
+        ctx.setdefault("purchase_count", len(mine))
+        ctx.setdefault("purchase_total", round(sum(float(x.get("price_usd", 0) or 0) for x in mine), 2))
+    except Exception:
+        pass
     ctx.setdefault("referrals", 0)
     ctx.setdefault("earned", 0.0)
+    cur = settings_store.currency()
+    if cur:   # money values read "25ლ" / "25.85ლ"; {name_num} keeps the plain number
+        for key in _MONEY_VARS:
+            if key in ctx and isinstance(ctx[key], (int, float)) and not isinstance(ctx[key], bool):
+                ctx[key + "_num"] = ctx[key]
+                ctx[key] = settings_store.format_amount(ctx[key], cur)
     return ctx
 
 
@@ -205,7 +233,7 @@ def _label(btn: dict, lang: str, default_lang: str, ctx: dict) -> str:
     return text
 
 
-def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> InlineKeyboardMarkup:
+def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int, row_offset: int = 0) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for row in page.get("rows", []):
         built: list[InlineKeyboardButton] = []
@@ -219,6 +247,12 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> 
                     built.append(InlineKeyboardButton(text=label, callback_data=ADMIN_BUTTON_CB))
             elif action.startswith("builtin:"):
                 built.append(InlineKeyboardButton(text=label, callback_data=BUILTINS.get(action[8:], "noop")))
+            elif action.startswith("choose:") and action.split(":", 3)[2:3] == ["@"]:
+                # value "@" = "same as this button's label": remember where the button sits
+                # (row.col in the final keyboard) so the press can read its text back
+                _, var, _v, target = action.split(":", 3)
+                built.append(InlineKeyboardButton(
+                    text=label, callback_data=f"choose:{var}:@{len(rows) + row_offset}.{len(built)}:{target}"))
             elif action.startswith("page:") or action.startswith("choose:") or action.startswith("confirm:"):
                 built.append(InlineKeyboardButton(text=label, callback_data=action))
             else:
@@ -231,12 +265,45 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> 
 
 
 # ── catalog (products / districts) ───────────────────────────────────────────
-def _list_items(source: str, city: str, uid: int | None = None) -> dict:
-    """Return {slug: item_dict} for a data-driven list (a user's private listing replaces the global one)."""
+def _page_city(page: dict, uid: int | None) -> str:
+    """City of a list page: taken from a session variable (city_var) or fixed."""
+    var = page.get("city_var")
+    val = _sess(uid)["vars"].get(var) if (var and uid is not None) else None
+    return str(val or page.get("city") or "tbilisi")
+
+
+def _list_items(page: dict, uid: int | None = None) -> dict:
+    """Return {slug: item_dict} for a data-driven list.
+
+    sources: products (optionally only one category), districts (optionally only the
+    districts assigned to the picked product), categories, cities.
+    A user's private listing replaces the global products.
+    """
+    source = page.get("source", "products")
+    city = _page_city(page, uid)
+    v = _sess(uid)["vars"] if uid is not None else {}
     try:
+        if source == "cities":
+            return {c: {"name": c.replace("_", " ").title()} for c in ds.get_cities()}
         if source == "districts":
-            return ds.get_districts(city or "tbilisi")
-        return ds.get_products(city or "tbilisi", user_id=uid)
+            items = ds.get_districts(city)
+            pv = page.get("product_var")
+            if pv and v.get(pv):
+                allowed = ds.get_product_districts(v[pv])
+                if allowed:
+                    items = {k: x for k, x in items.items() if k in allowed}
+            return items
+        prods = ds.get_products(city, user_id=uid)
+        if source == "categories":
+            cats = ds.get_categories(city)
+            if page.get("hide_empty", True):
+                used = {p.get("category") for p in prods.values()}
+                cats = {k: x for k, x in cats.items() if k in used}
+            return cats
+        cv = page.get("category_var")
+        if cv and v.get(cv):
+            prods = {k: x for k, x in prods.items() if x.get("category") == v[cv]}
+        return prods
     except Exception:
         return {}
 
@@ -245,14 +312,34 @@ def _lookup_item(source: str, city: str, slug: str) -> dict | None:
     if not slug:
         return None
     try:
+        if source == "cities":
+            return {"name": str(slug).replace("_", " ").title()}
+        if source == "categories":
+            return ds.get_categories().get(slug)
         if source == "districts":
-            return ds.get_districts(city or "tbilisi").get(slug)
+            return ds.get_districts(city or "tbilisi").get(slug) or ds._load().get("districts", {}).get(slug)
         item = ds.get_product(slug)
         if item is not None:
             return item
         return ds.get_products(city or "tbilisi").get(slug)
     except Exception:
         return None
+
+
+def _derive_vars(uid: int) -> None:
+    """Keep readable values for what the user picked: {product_name} {product_price}
+    {category_name} {district_name} {city_name} (variant is stored as-is)."""
+    v = _sess(uid)["vars"]
+    for var, source, prefix in (("product", "products", "product"), ("category", "categories", "category"),
+                                ("district", "districts", "district"), ("city", "cities", "city")):
+        slug = v.get(var)
+        item = _lookup_item(source, v.get("city") or "tbilisi", slug) if slug else None
+        if item:
+            v[prefix + "_name"] = item.get("name", "")
+            if source in ("districts", "categories"):
+                v[prefix + "_image"] = item.get("image", "") or ""
+            if source == "products" and "price_usd" in item:
+                v["product_price"] = item.get("price_usd")
 
 
 def _apply_item_lookup(page: dict, uid: int) -> None:
@@ -274,18 +361,16 @@ def _apply_item_lookup(page: dict, uid: int) -> None:
 
 def _list_keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int) -> InlineKeyboardMarkup:
     """Keyboard for a `list` page: one button per data item, then static rows."""
-    source = page.get("source", "products")
-    city = page.get("city", "tbilisi")
     item_var = page.get("item_var", "product")
     target = page.get("item_target", "main")
     rows: list[list[InlineKeyboardButton]] = []
-    for slug, item in _list_items(source, city, uid).items():
+    for slug, item in _list_items(page, uid).items():
         rows.append([InlineKeyboardButton(
             text=str(item.get("name", slug)),
             callback_data=f"pick|{item_var}|{target}|{slug}",
         )])
     # static extra rows (e.g. a back button) reuse the normal builder
-    extra = _keyboard(page, lang, default_lang, ctx, uid)
+    extra = _keyboard(page, lang, default_lang, ctx, uid, row_offset=len(rows))
     rows.extend(extra.inline_keyboard)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -303,7 +388,13 @@ async def _compute_receipt(page: dict, uid: int) -> tuple[str | None, dict]:
     coin = (v.get(rc.get("coin_var", "crypto")) or rc.get("coin_fixed") or "BTC").upper()
     amount = float(v.get(rc.get("amount_var", "amount"), 0) or 0)
     fiat_to_usd = float(rc.get("fiat_to_usd", 1.0))
-    usd_amount = round(amount * fiat_to_usd, 2)
+    # amounts are in the bot's currency; refresh its live USD rate (no-op without a currency)
+    try:
+        from crypto_rates import refresh_fiat_rate
+        await refresh_fiat_rate()
+    except Exception:
+        pass
+    usd_amount = round(amount * fiat_to_usd * settings_store.usd_per_unit(), 2)
 
     wallet = CRYPTO_WALLETS.get(coin, "")
     try:
@@ -387,6 +478,7 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     ptype = page.get("type", "message")
 
     # merge selected product/district fields into session vars for templating
+    _derive_vars(uid)
     _apply_item_lookup(page, uid)
 
     # input page: arm the awaiting-input state, then render its prompt as a message
@@ -411,7 +503,12 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
         kb = _list_keyboard(page, lang, default_lang, ctx, uid)
     else:
         kb = _keyboard(page, lang, default_lang, ctx, uid)
-    img = qr_override or _image_path(page.get("image", ""))
+    # "image_from": show the picture of the picked district/category when it has one
+    picked_img = None
+    src = page.get("image_from")
+    if src in ("district", "category"):
+        picked_img = _image_path(_sess(uid)["vars"].get(src + "_image", ""))
+    img = picked_img or qr_override or _image_path(page.get("image", ""))
 
     await _emit(message, caption, parse_mode, kb, img, is_start=is_start)
 
@@ -426,18 +523,44 @@ def _msg_kind(message) -> str:
     return "text"
 
 
+# which media file each chat message currently shows: {(chat_id, message_id): path}.
+# When the next screen uses the same file only the caption/buttons are edited, so a
+# video or GIF keeps playing instead of restarting.
+_SHOWN: dict[tuple, str] = {}
+
+
+def _mkey(message):
+    chat = getattr(message, "chat", None)
+    return (getattr(chat, "id", None), getattr(message, "message_id", None))
+
+
+def _remember(sent, img):
+    if len(_SHOWN) > 5000:
+        _SHOWN.clear()
+    if sent is not None and img:
+        _SHOWN[_mkey(sent)] = img
+
+
 async def _emit(message, caption, parse_mode, kb, img, *, is_start=False):
     kind = _media_kind(img) if img else None
     if is_start:
         if img:
-            await _send_media(message, kind, img, caption, parse_mode, kb)
+            _remember(await _send_media(message, kind, img, caption, parse_mode, kb), img)
         else:
             await message.answer(text=caption or " ", parse_mode=parse_mode, reply_markup=kb)
         return
     try:
         cur = _msg_kind(message)
+        if img and cur != "text" and _SHOWN.get(_mkey(message)) == img:
+            try:
+                await message.edit_caption(caption=caption, parse_mode=parse_mode, reply_markup=kb)
+            except Exception as e:
+                if "not modified" not in str(e).lower():
+                    raise
+            return
         if img and cur != "text":
             await message.edit_media(media=_input_media(kind, img, caption, parse_mode), reply_markup=kb)
+            _remember(message, img)
             return
         if not img and cur == "text":
             await message.edit_text(text=caption or " ", parse_mode=parse_mode, reply_markup=kb)
@@ -449,7 +572,7 @@ async def _emit(message, caption, parse_mode, kb, img, *, is_start=False):
     except Exception:
         pass
     if img:
-        await _send_media(message, kind, img, caption, parse_mode, kb)
+        _remember(await _send_media(message, kind, img, caption, parse_mode, kb), img)
     else:
         await message.answer(text=caption or " ", parse_mode=parse_mode, reply_markup=kb)
 
@@ -469,12 +592,13 @@ def _history_ctx(page: dict, uid: int, lang: str, default_lang: str, parse_mode)
         items = ds.get_user_purchases(uid)
     except Exception:
         items = []
-    line = _pick(h.get("line", ""), lang, default_lang) or _HIST_LINE
+    cur = settings_store.currency()
+    line = _pick(h.get("line", ""), lang, default_lang) or (_HIST_LINE.replace("{price}$", "{price}") if cur else _HIST_LINE)
     esc = (lambda x: html.escape(str(x))) if str(parse_mode).upper() == "HTML" else str
     out = []
     for p in items[:limit]:
         price = p.get("price_usd", 0)
-        price = int(price) if float(price) == int(price) else price
+        price = settings_store.format_amount(price, cur) if cur else (int(price) if float(price) == int(price) else price)
         out.append(_fmt(line, {"date": esc(p.get("date", "")), "product": esc(p.get("product", "")),
                                "price": price, "note": esc(p.get("note", "")), "id": p.get("id", "")}))
     if not out:
@@ -649,6 +773,20 @@ async def engine_pick(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+def _pressed_label(callback: CallbackQuery, pos: str) -> str:
+    """Text of the button that was pressed (value "@r.c" = row.col), without the colour emoji."""
+    try:
+        r, c = (int(x) for x in pos.split("."))
+        text = callback.message.reply_markup.inline_keyboard[r][c].text
+    except Exception:
+        return ""
+    for prefix in STYLE_PREFIX.values():
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+            break
+    return text.strip()
+
+
 @engine_router.callback_query(F.data.startswith("choose:"))
 async def engine_choose(callback: CallbackQuery) -> None:
     # choose:<var>:<value>:<page>
@@ -656,6 +794,8 @@ async def engine_choose(callback: CallbackQuery) -> None:
         _, var, value, page = callback.data.split(":", 3)
     except ValueError:
         await callback.answer(); return
+    if value.startswith("@"):
+        value = _pressed_label(callback, value[1:])
     _sess(callback.from_user.id)["vars"][var] = value
     await render_page(callback, page)
     await callback.answer()
@@ -668,9 +808,16 @@ async def engine_confirm(callback: CallbackQuery) -> None:
     uid = callback.from_user.id
     v = _sess(uid)["vars"]
     un = f"@{callback.from_user.username}" if callback.from_user.username else "no-username"
+    amt = v.get("amount", "?")
+    if isinstance(amt, (int, float)) and settings_store.currency():
+        amt = settings_store.format_amount(amt)
     text = (f"💸 User {un} (id {uid}) pressed 'I paid'.\n"
             f"Request #{v.get('request_id','?')} · {v.get('crypto_amount','?')} "
-            f"{v.get('coin','?')} · amount {v.get('amount','?')}")
+            f"{v.get('coin','?')} · amount {amt}")
+    picked = [f"{label}: {v[key]}" for label, key in (("City", "city_name"), ("Category", "category_name"),
+              ("Product", "product_name"), ("District", "district_name"), ("Variant", "variant")) if v.get(key)]
+    if picked:
+        text += "\n" + " · ".join(picked)
     for admin_id in ADMIN_IDS:
         try:
             await callback.bot.send_message(admin_id, text)

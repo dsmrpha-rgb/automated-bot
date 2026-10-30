@@ -11,6 +11,17 @@ class AddProductFSM(StatesGroup):
     waiting_quantity = State()
 
 
+class AddCategoryFSM(StatesGroup):
+    """Add a category: name -> city (or '-' for every city)."""
+    waiting_name = State()
+    waiting_city = State()
+
+
+class DistrictImageFSM(StatesGroup):
+    """Attach / replace / remove a district's picture."""
+    waiting_image = State()
+
+
 class PrivateListingFSM(StatesGroup):
     """Open/create a private listing by user ID."""
     waiting_user_id = State()

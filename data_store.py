@@ -57,6 +57,11 @@ def _save(data: dict) -> None:
 
 # ── Products ───────────────────────────────────────────────────────────
 
+def _same_city(a, b) -> bool:
+    """Cities are compared ignoring case ('Tbilisi' == 'tbilisi')."""
+    return str(a or "tbilisi").strip().lower() == str(b or "tbilisi").strip().lower()
+
+
 def get_products(city: str = "tbilisi", user_id: int | None = None, all_products: bool = False) -> dict[str, dict]:
     """Product list.
 
@@ -67,10 +72,10 @@ def get_products(city: str = "tbilisi", user_id: int | None = None, all_products
     data = _load()
     prods = data["products"]
     if all_products:
-        return {k: v for k, v in prods.items() if v.get("city") == city}
+        return {k: v for k, v in prods.items() if _same_city(v.get("city"), city)}
     if user_id is not None and str(user_id) in data.get("private_listings", {}):
         return {k: v for k, v in prods.items() if v.get("owner") == user_id}
-    return {k: v for k, v in prods.items() if v.get("city") == city and v.get("owner") is None}
+    return {k: v for k, v in prods.items() if _same_city(v.get("city"), city) and v.get("owner") is None}
 
 
 # ── Private listings ───────────────────────────────────────────────────
@@ -189,7 +194,7 @@ def toggle_product_district(slug: str, district_slug: str) -> bool:
 
 def get_districts(city: str = "tbilisi") -> dict[str, dict]:
     data = _load()
-    return {k: v for k, v in data["districts"].items() if v.get("city") == city}
+    return {k: v for k, v in data["districts"].items() if _same_city(v.get("city"), city)}
 
 
 def add_district(slug: str, name: str, city: str = "tbilisi",
@@ -206,6 +211,44 @@ def delete_district(slug: str) -> bool:
         _save(data)
         return True
     return False
+
+
+# ── Categories (optional layer between city and product) ───────────────
+
+def get_categories(city: str | None = None) -> dict[str, dict]:
+    """Categories; with a city: those for that city plus the ones shared by every city (city '')."""
+    cats = _load().get("categories", {})
+    if city is None:
+        return dict(cats)
+    return {k: v for k, v in cats.items() if not v.get("city") or _same_city(v.get("city"), city)}
+
+
+def add_category(slug: str, name: str, city: str = "", image: str = "") -> None:
+    data = _load()
+    data.setdefault("categories", {})[slug] = {"name": name, "city": city, "image": image}
+    _save(data)
+
+
+def delete_category(slug: str) -> bool:
+    """Delete a category; its products simply become uncategorised."""
+    data = _load()
+    if slug not in data.get("categories", {}):
+        return False
+    del data["categories"][slug]
+    for p in data.get("products", {}).values():
+        if p.get("category") == slug:
+            p["category"] = ""
+    _save(data)
+    return True
+
+
+def get_cities() -> list[str]:
+    """Every city slug used by products, districts or categories."""
+    data = _load()
+    found = {str(p.get("city") or "tbilisi").lower() for p in data.get("products", {}).values() if p.get("owner") is None}
+    found |= {str(d.get("city") or "tbilisi").lower() for d in data.get("districts", {}).values()}
+    found |= {str(c["city"]).lower() for c in data.get("categories", {}).values() if c.get("city")}
+    return sorted(found)
 
 
 # ── Users ──────────────────────────────────────────────────────────────
@@ -291,6 +334,15 @@ def set_user_balance(user_id: int, amount: float) -> bool:
 def user_count() -> int:
     data = _load()
     return len(data["users"])
+
+
+def get_counts() -> dict:
+    """Live numbers usable in button labels: {cities} {products_count}."""
+    data = _load()
+    prods = [p for p in data.get("products", {}).values() if p.get("owner") is None]
+    cities = {str(p.get("city") or "tbilisi").lower() for p in prods}
+    cities |= {str(d.get("city") or "tbilisi").lower() for d in data.get("districts", {}).values()}
+    return {"cities": len(cities), "products_count": len(prods)}
 
 
 # ── Purchase history (recorded by admins) ─────────────────────────────

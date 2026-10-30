@@ -113,6 +113,40 @@ async def _fetch_price_coingecko(coin: str) -> Optional[float]:
     return None
 
 
+_fiat_ts: dict[str, float] = {}
+
+
+async def refresh_fiat_rate() -> float:
+    """Update the live USD value of the bot's currency (cached 30 min). Returns usd_per_unit."""
+    import settings_store
+    cur = settings_store.currency()
+    if not cur or cur["code"] == "USD" or cur["rate"] != "auto":
+        return settings_store.usd_per_unit()
+    code = cur["code"]
+    if time.time() - _fiat_ts.get(code, 0) < 1800 and settings_store._live_rate["code"] == code:
+        return settings_store.usd_per_unit()
+    per_usd = None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies={code.lower()}",
+                                   timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    per_usd = ((await resp.json()).get("tether") or {}).get(code.lower())
+        if not per_usd:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://open.er-api.com/v6/latest/USD", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        per_usd = ((await resp.json()).get("rates") or {}).get(code)
+    except Exception as e:
+        logger.warning("Fiat rate error for %s: %s", code, e)
+    if per_usd and float(per_usd) > 0:
+        settings_store._live_rate.update({"code": code, "usd_per_unit": 1.0 / float(per_usd)})
+        _fiat_ts[code] = time.time()
+    elif settings_store._live_rate["code"] != code:
+        logger.warning("No exchange rate for %s - treating it as USD until one is available", code)
+    return settings_store.usd_per_unit()
+
+
 async def get_usd_to_crypto(coin: str, usd_amount: float) -> float:
     """
     Convert a USD amount to the equivalent crypto amount.

@@ -482,13 +482,21 @@ def t(key: str, lang: str = "ka") -> str:
         import settings_store
         override = settings_store.string_override(key, lang)
         if override is not None:
-            return override
+            return settings_store.localize_money_text(override)
     except Exception:
         pass
     val = TRANSLATIONS.get(lang, TRANSLATIONS["ka"]).get(key)
     if val is None:
         val = TRANSLATIONS["ka"].get(key, key)
-    return val
+    return _money(val)
+
+
+def _money(val):
+    try:
+        import settings_store
+        return settings_store.localize_money_text(val)
+    except Exception:
+        return val
 
 
 def t_rates(lang: str = "ka") -> dict:

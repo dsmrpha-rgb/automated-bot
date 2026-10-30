@@ -2,17 +2,21 @@
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from settings_store import fmt_money
+
 
 # ── Main admin menu ────────────────────────────────────────────────────
 
 ADMIN_MENU_ITEMS = [
     ("products", "📦 პროდუქტები", "admin:products"),
     ("districts", "🗺 უბნები", "admin:districts"),
+    ("categories", "🗂 კატეგორიები", "admin:categories"),
     ("broadcast", "📢 განცხადება", "admin:broadcast"),
     ("dm", "✉ პირადი", "admin:dm"),
     ("scheduled", "📅 დაგეგმილი", "admin:scheduled"),
     ("private", "🔒 პირადი ლისტინგი", "admin:private"),
     ("users", "👥 მომხმარებლები", "admin:users"),
+    ("currency", "💱 ვალუტა", "admin:currency"),
     ("purchases", "🧾 შესყიდვები", "admin:purchases"),
     ("stats", "📊 სტატისტიკა", "admin:stats"),
 ]
@@ -44,7 +48,7 @@ def products_menu_kb(products: dict) -> InlineKeyboardMarkup:
         qty_text = "∞" if qty == -1 else str(qty)
         rows.append([
             InlineKeyboardButton(
-                text=f"{name} | {price}$ | [{qty_text}]",
+                text=f"{name} | {fmt_money(price)} | [{qty_text}]",
                 callback_data=f"adm_prod_edit:{slug}",
             ),
             InlineKeyboardButton(text="❌", callback_data=f"adm_prod_del:{slug}"),
@@ -65,7 +69,7 @@ def private_view_kb(user_id: int, products: dict) -> InlineKeyboardMarkup:
     rows = []
     for slug, info in products.items():
         rows.append([
-            InlineKeyboardButton(text=f"{info['name']} | {info['price_usd']}$", callback_data=f"adm_prod_edit:{slug}"),
+            InlineKeyboardButton(text=f"{info['name']} | {fmt_money(info['price_usd'])}", callback_data=f"adm_prod_edit:{slug}"),
             InlineKeyboardButton(text="❌", callback_data=f"adm_prod_del:{slug}"),
         ])
     rows.append([InlineKeyboardButton(text="➕ პროდუქტის დამატება", callback_data=f"adm_priv_add:{user_id}")])
@@ -81,7 +85,8 @@ def product_edit_kb(slug: str) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="💰 ფასი", callback_data=f"adm_pe:price:{slug}")],
         [InlineKeyboardButton(text="📝 აღწერა", callback_data=f"adm_pe:desc:{slug}"),
          InlineKeyboardButton(text="📦 რაოდენობა", callback_data=f"adm_pe:qty:{slug}")],
-        [InlineKeyboardButton(text="🗺 უბნების მინიჭება", callback_data=f"adm_pd:{slug}")],
+        [InlineKeyboardButton(text="🗺 უბნების მინიჭება", callback_data=f"adm_pd:{slug}"),
+         InlineKeyboardButton(text="🗂 კატეგორია", callback_data=f"adm_pcat:{slug}")],
         [InlineKeyboardButton(text="◀ უკან", callback_data="admin:products")],
     ])
 
@@ -116,10 +121,37 @@ def districts_menu_kb(districts: dict) -> InlineKeyboardMarkup:
     for slug, info in districts.items():
         rows.append([
             InlineKeyboardButton(text=info["name"], callback_data="noop"),
+            InlineKeyboardButton(text="🖼✅" if info.get("image") else "🖼", callback_data=f"adm_dist_img:{slug}"),
             InlineKeyboardButton(text="❌", callback_data=f"adm_dist_del:{slug}"),
         ])
     rows.append([InlineKeyboardButton(text="➕ დამატება", callback_data="adm_dist_add")])
     rows.append([InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ── Categories ─────────────────────────────────────────────────────────
+
+def categories_menu_kb(categories: dict) -> InlineKeyboardMarkup:
+    rows = []
+    for slug, info in categories.items():
+        city = f" ({info['city']})" if info.get("city") else ""
+        rows.append([
+            InlineKeyboardButton(text=f"{info['name']}{city}", callback_data="noop"),
+            InlineKeyboardButton(text="❌", callback_data=f"adm_cat_del:{slug}"),
+        ])
+    rows.append([InlineKeyboardButton(text="➕ დამატება", callback_data="adm_cat_add")])
+    rows.append([InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def product_category_kb(slug: str, categories: dict, current: str) -> InlineKeyboardMarkup:
+    """Pick a category for a product (callback carries the list index to stay under 64 bytes)."""
+    rows = []
+    for i, (cslug, info) in enumerate(categories.items()):
+        mark = "✅ " if cslug == current else ""
+        rows.append([InlineKeyboardButton(text=f"{mark}{info['name']}", callback_data=f"adm_pcs:{i}|{slug}")])
+    rows.append([InlineKeyboardButton(text="— არცერთი —", callback_data=f"adm_pcs:-|{slug}")])
+    rows.append([InlineKeyboardButton(text="◀ უკან", callback_data=f"adm_prod_edit:{slug}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -215,6 +247,16 @@ def users_menu_kb(total: int, banned_count: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="💰 ბალანსის დაყენება", callback_data="adm_user_balance")],
         [InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")],
     ])
+
+
+# ── Currency ───────────────────────────────────────────────────────────
+
+def currency_menu_kb() -> InlineKeyboardMarkup:
+    from settings_store import CURRENCY_PRESETS
+    buttons = [InlineKeyboardButton(text=f"{sym} {code}", callback_data=f"adm_cur:{code}") for code, sym in CURRENCY_PRESETS]
+    rows = [buttons[i:i + 3] for i in range(0, len(buttons), 3)]
+    rows.append([InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # ── Purchase history ───────────────────────────────────────────────────

@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 
 import bot_registry
 import data_store as ds
+import settings_store
 import keyboards
 import texts
 from config import (
@@ -29,6 +30,17 @@ router = Router()
 def _generate_session_id() -> str:
     """Generate a random hex session ID (32 bytes = 64 hex chars)."""
     return secrets.token_hex(32)
+
+
+async def _price_in_usd(price) -> float:
+    """Prices are kept in the bot's currency; crypto amounts are worked out from USD."""
+    try:
+        import settings_store
+        from crypto_rates import refresh_fiat_rate
+        await refresh_fiat_rate()
+        return round(float(price) * settings_store.usd_per_unit(), 2)
+    except Exception:
+        return price
 
 
 def _extract_price(product_text: str) -> float:
@@ -187,7 +199,7 @@ async def on_district_selected(callback: CallbackQuery) -> None:
     product_info = products.get(product_cb, {})
     product_name = product_info.get("name", product_cb)
     description = product_info.get("description", "+AAA")
-    price_usd = product_info.get("price_usd", _extract_price(product_name))
+    price_usd = await _price_in_usd(product_info.get("price_usd", _extract_price(product_name)))
 
     session_id = _generate_session_id()
     user_balance = ds.get_user_balance(callback.from_user.id)
@@ -198,7 +210,7 @@ async def on_district_selected(callback: CallbackQuery) -> None:
         product=product_name,
         description=description,
         session_id=session_id,
-        balance=user_balance,
+        balance=settings_store.num(user_balance),
     )
 
     try:
@@ -231,7 +243,7 @@ async def on_crypto_payment(callback: CallbackQuery) -> None:
     product_info = products.get(product_cb, {})
     product_name = product_info.get("name", product_cb)
     district_name = districts.get(district_cb, {}).get("name", district_cb)
-    price_usd = product_info.get("price_usd", _extract_price(product_name))
+    price_usd = await _price_in_usd(product_info.get("price_usd", _extract_price(product_name)))
 
     wallet_address = CRYPTO_WALLETS.get(crypto, "")
     from crypto_rates import get_usd_to_crypto
@@ -277,7 +289,7 @@ async def on_balance(callback: CallbackQuery) -> None:
     """Show balance screen with crypto deposit options."""
     lang = _lang(callback.from_user.id)
     user_balance = ds.get_user_balance(callback.from_user.id)
-    caption = texts.t("BALANCE_CAPTION", lang).format(balance=user_balance)
+    caption = texts.t("BALANCE_CAPTION", lang).format(balance=settings_store.num(user_balance))
     if callback.message.photo:
         await callback.message.edit_media(
             media=InputMediaPhoto(media=FSInputFile(MENU_IMAGE_PATH), caption=caption),
@@ -370,7 +382,7 @@ async def on_referral(callback: CallbackQuery) -> None:
     bot_info = await callback.bot.get_me()
     caption = texts.t("REFERRAL_CAPTION", lang).format(
         referrals=0,
-        earned=0.0,
+        earned=settings_store.num(0.0),
         bot_username=bot_info.username,
         user_id=callback.from_user.id,
     )
