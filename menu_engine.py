@@ -30,11 +30,22 @@ Page hooks (page["on_enter"], all optional) run when a user reaches the page:
                                              plus {username} {user_id})
   send          [{text, image}, ...]         extra messages sent to the user
 
+Media: a page/hook `image` may be a photo (.jpg .png .webp), a GIF (.gif, sent as
+an animation) or a video (.mp4 .mov .webm .m4v) — the extension decides.
+
+Channel gate (config["gate"], optional): /start first asks the user to join a
+channel; mode "verify" really checks membership (bot must be admin in the
+channel), mode "dummy" lets anyone through after pressing the check button.
+
+History: a `history` page (or any caption containing {purchases}) lists the
+user's purchases, which admins record in the bot or in the Global Admin.
+
 Templating: captions and labels are `.format`-ed with the user's session
 variables plus {balance} {bot_username} {user_id} {referrals} {earned}.
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 import random
@@ -42,13 +53,16 @@ import re
 from typing import Any
 
 from aiogram import F, Router
+from aiogram import BaseMiddleware
 from aiogram.filters import CommandStart, BaseFilter
 from aiogram.types import (
     CallbackQuery,
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaAnimation,
     InputMediaPhoto,
+    InputMediaVideo,
     Message,
 )
 
@@ -134,6 +148,36 @@ def _image_path(image: str) -> str | None:
         return None
     p = image if os.path.isabs(image) else os.path.join(_BASE_DIR, image)
     return p if os.path.exists(p) else None
+
+
+_VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v"}
+
+
+def _media_kind(path: str) -> str:
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".gif":
+        return "animation"
+    if ext in _VIDEO_EXTS:
+        return "video"
+    return "photo"
+
+
+def _input_media(kind: str, path: str, caption: str, parse_mode):
+    cls = {"video": InputMediaVideo, "animation": InputMediaAnimation}.get(kind, InputMediaPhoto)
+    kw = {"supports_streaming": True} if kind == "video" else {}
+    return cls(media=FSInputFile(path), caption=caption, parse_mode=parse_mode, **kw)
+
+
+async def _send_media(sender, kind: str, path: str, caption, parse_mode, kb=None):
+    """sender is a Message (answer_*) — returns the sent message."""
+    if kind == "video":
+        return await sender.answer_video(video=FSInputFile(path), caption=caption,
+                                         parse_mode=parse_mode, reply_markup=kb, supports_streaming=True)
+    if kind == "animation":
+        return await sender.answer_animation(animation=FSInputFile(path), caption=caption,
+                                             parse_mode=parse_mode, reply_markup=kb)
+    return await sender.answer_photo(photo=FSInputFile(path), caption=caption,
+                                     parse_mode=parse_mode, reply_markup=kb)
 
 
 async def _context(uid: int, bot) -> dict:
@@ -311,8 +355,14 @@ async def _run_on_enter(page: dict, uid: int, bot, target, lang: str, default_la
         img = _image_path(extra.get("image", ""))
         try:
             if img:
-                await bot.send_photo(uid, FSInputFile(img), caption=text or None,
-                                     parse_mode=page.get("parse_mode") or None)
+                kind = _media_kind(img)
+                pm = page.get("parse_mode") or None
+                if kind == "video":
+                    await bot.send_video(uid, FSInputFile(img), caption=text or None, parse_mode=pm)
+                elif kind == "animation":
+                    await bot.send_animation(uid, FSInputFile(img), caption=text or None, parse_mode=pm)
+                else:
+                    await bot.send_photo(uid, FSInputFile(img), caption=text or None, parse_mode=pm)
             elif text:
                 await bot.send_message(uid, text, parse_mode=page.get("parse_mode") or None)
         except Exception:
@@ -352,8 +402,11 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     await _run_on_enter(page, uid, bot, target, lang, default_lang)
 
     ctx = await _context(uid, bot)
-    caption = _fmt(_pick(page.get("text", ""), lang, default_lang), ctx)
+    raw_text = _pick(page.get("text", ""), lang, default_lang)
     parse_mode = page.get("parse_mode") or None
+    if ptype == "history" or "{purchases" in raw_text:
+        ctx.update(_history_ctx(page, uid, lang, default_lang, parse_mode))
+    caption = _fmt(raw_text, ctx)
     if ptype == "list":
         kb = _list_keyboard(page, lang, default_lang, ctx, uid)
     else:
@@ -363,20 +416,30 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     await _emit(message, caption, parse_mode, kb, img, is_start=is_start)
 
 
+def _msg_kind(message) -> str:
+    if message.animation:
+        return "animation"
+    if message.video:
+        return "video"
+    if message.photo:
+        return "photo"
+    return "text"
+
+
 async def _emit(message, caption, parse_mode, kb, img, *, is_start=False):
+    kind = _media_kind(img) if img else None
     if is_start:
         if img:
-            await message.answer_photo(photo=FSInputFile(img), caption=caption,
-                                       parse_mode=parse_mode, reply_markup=kb)
+            await _send_media(message, kind, img, caption, parse_mode, kb)
         else:
             await message.answer(text=caption or " ", parse_mode=parse_mode, reply_markup=kb)
         return
     try:
-        if img and message.photo:
-            await message.edit_media(media=InputMediaPhoto(media=FSInputFile(img),
-                                     caption=caption, parse_mode=parse_mode), reply_markup=kb)
+        cur = _msg_kind(message)
+        if img and cur != "text":
+            await message.edit_media(media=_input_media(kind, img, caption, parse_mode), reply_markup=kb)
             return
-        if not img and not message.photo:
+        if not img and cur == "text":
             await message.edit_text(text=caption or " ", parse_mode=parse_mode, reply_markup=kb)
             return
     except Exception:
@@ -386,10 +449,126 @@ async def _emit(message, caption, parse_mode, kb, img, *, is_start=False):
     except Exception:
         pass
     if img:
-        await message.answer_photo(photo=FSInputFile(img), caption=caption,
-                                   parse_mode=parse_mode, reply_markup=kb)
+        await _send_media(message, kind, img, caption, parse_mode, kb)
     else:
         await message.answer(text=caption or " ", parse_mode=parse_mode, reply_markup=kb)
+
+
+# ── purchase history ──────────────────────────────────────────────────────────
+_HIST_LINE = "🛒 {date} — {product} — {price}$"
+_HIST_EMPTY = {"ka": "შესყიდვები ჯერ არ არის.", "ru": "Покупок пока нет.", "en": "No purchases yet."}
+
+
+def _history_ctx(page: dict, uid: int, lang: str, default_lang: str, parse_mode) -> dict:
+    h = page.get("history") or {}
+    try:
+        limit = max(1, min(int(h.get("limit", 10)), 30))
+    except (TypeError, ValueError):
+        limit = 10
+    try:
+        items = ds.get_user_purchases(uid)
+    except Exception:
+        items = []
+    line = _pick(h.get("line", ""), lang, default_lang) or _HIST_LINE
+    esc = (lambda x: html.escape(str(x))) if str(parse_mode).upper() == "HTML" else str
+    out = []
+    for p in items[:limit]:
+        price = p.get("price_usd", 0)
+        price = int(price) if float(price) == int(price) else price
+        out.append(_fmt(line, {"date": esc(p.get("date", "")), "product": esc(p.get("product", "")),
+                               "price": price, "note": esc(p.get("note", "")), "id": p.get("id", "")}))
+    if not out:
+        out = [_pick(h.get("empty", ""), lang, default_lang) or _HIST_EMPTY.get(lang) or _HIST_EMPTY["en"]]
+    total = round(sum(float(p.get("price_usd", 0) or 0) for p in items), 2)
+    return {"purchases": "\n".join(out), "purchase_count": len(items), "purchase_total": total}
+
+
+# ── channel gate ──────────────────────────────────────────────────────────────
+_GATE_TEXT = {"ka": "👋 გასაგრძელებლად გამოიწერეთ ჩვენი არხი, შემდეგ დააჭირეთ „შემოწმება“.",
+              "ru": "👋 Чтобы продолжить, подпишитесь на наш канал, затем нажмите «Проверить».",
+              "en": "👋 To continue, please join our channel, then press “Check”."}
+_GATE_JOIN = {"ka": "📢 არხზე გადასვლა", "ru": "📢 Перейти в канал", "en": "📢 Join channel"}
+_GATE_CHECK = {"ka": "✅ შემოწმება", "ru": "✅ Проверить", "en": "✅ Check"}
+_GATE_FAIL = {"ka": "❌ ჯერ არ ხართ გამოწერილი.", "ru": "❌ Вы ещё не подписаны.", "en": "❌ You haven't joined yet."}
+
+
+def _gate_cfg() -> dict | None:
+    g = load_config().get("gate")
+    return g if isinstance(g, dict) and g.get("enabled") else None
+
+
+def _gate_text(g: dict, key: str, defaults: dict, lang: str, default_lang: str) -> str:
+    return _pick(g.get(key, ""), lang, default_lang) or defaults.get(lang) or defaults["en"]
+
+
+async def _is_member(bot, channel: str, uid: int) -> bool | None:
+    """True/False, or None when Telegram can't tell (bot not in the channel, bad id…)."""
+    try:
+        chat = int(channel) if channel.lstrip("-").isdigit() else channel
+        m = await bot.get_chat_member(chat, uid)
+    except Exception:
+        return None
+    status = getattr(m.status, "value", m.status)
+    if status in ("creator", "administrator", "member"):
+        return True
+    if status == "restricted":
+        return bool(getattr(m, "is_member", False))
+    return False
+
+
+def _gate_kb(g: dict, lang: str, default_lang: str) -> InlineKeyboardMarkup:
+    rows = []
+    url = str(g.get("url", "") or "")
+    if url:
+        rows.append([InlineKeyboardButton(text=_gate_text(g, "join_label", _GATE_JOIN, lang, default_lang), url=url)])
+    rows.append([InlineKeyboardButton(text=_gate_text(g, "check_label", _GATE_CHECK, lang, default_lang),
+                                      callback_data="gate:check")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def show_gate(target, *, is_start: bool = False) -> None:
+    g = _gate_cfg()
+    if not g:
+        return
+    cfg = load_config()
+    default_lang = cfg.get("default_lang", "ka")
+    message = target.message if isinstance(target, CallbackQuery) else target
+    lang = _lang(target.from_user.id, cfg)
+    text = _gate_text(g, "text", _GATE_TEXT, lang, default_lang)
+    img = _image_path(g.get("image", ""))
+    await _emit(message, text, "HTML", _gate_kb(g, lang, default_lang), img, is_start=is_start)
+
+
+def gate_blocks(uid: int) -> bool:
+    """True when the gate is on and this user still has to pass it."""
+    return bool(_gate_cfg()) and uid not in ADMIN_IDS and not ds.is_gate_ok(uid)
+
+
+class GateMiddleware(BaseMiddleware):
+    """Stops gated users from using the bot until they pass the channel check."""
+
+    async def __call__(self, handler, event, data):
+        user = getattr(event, "from_user", None)
+        if user is None or not gate_blocks(user.id):
+            return await handler(event, data)
+        if isinstance(event, CallbackQuery):
+            if (event.data or "").startswith("gate:"):
+                return await handler(event, data)
+            await show_gate(event)
+            await event.answer()
+            return None
+        if isinstance(event, Message):
+            if (event.text or "").startswith("/start"):
+                return await handler(event, data)
+            await show_gate(event, is_start=True)
+            return None
+        return await handler(event, data)
+
+
+def install_gate(dp) -> None:
+    mw = GateMiddleware()
+    dp.message.outer_middleware(mw)
+    dp.callback_query.outer_middleware(mw)
 
 
 # ── routes ────────────────────────────────────────────────────────────────────
@@ -400,8 +579,48 @@ async def engine_start(message: Message) -> None:
         ds.register_user(message.from_user.id, message.from_user.username or "")
     except Exception:
         pass
-    _sess(message.from_user.id)["await"] = None  # reset any pending input
+    uid = message.from_user.id
+    _sess(uid)["await"] = None  # reset any pending input
+    g = _gate_cfg()
+    if g and uid not in ADMIN_IDS:
+        if g.get("mode") == "dummy":
+            passed = ds.is_gate_ok(uid)
+        else:
+            member = await _is_member(message.bot, str(g.get("channel", "")), uid)
+            passed = ds.is_gate_ok(uid) if member is None else member
+            if passed != ds.is_gate_ok(uid):
+                ds.set_gate_ok(uid, passed)
+        if not passed:
+            await show_gate(message, is_start=True)
+            return
     await render_page(message, cfg.get("start_page", "main"), is_start=True)
+
+
+@engine_router.callback_query(F.data == "gate:check")
+async def engine_gate_check(callback: CallbackQuery) -> None:
+    g = _gate_cfg()
+    uid = callback.from_user.id
+    if not g or uid in ADMIN_IDS or ds.is_gate_ok(uid):
+        await render_page(callback, load_config().get("start_page", "main"))
+        await callback.answer()
+        return
+    cfg = load_config()
+    try:
+        ds.register_user(uid, callback.from_user.username or "")
+    except Exception:
+        pass
+    lang = _lang(uid, cfg)
+    default_lang = cfg.get("default_lang", "ka")
+    if g.get("mode") == "dummy":
+        member: bool | None = True
+    else:
+        member = await _is_member(callback.bot, str(g.get("channel", "")), uid)
+    if member:
+        ds.set_gate_ok(uid, True)
+        await render_page(callback, cfg.get("start_page", "main"))
+        await callback.answer()
+    else:
+        await callback.answer(_gate_text(g, "fail_text", _GATE_FAIL, lang, default_lang), show_alert=True)
 
 
 @engine_router.callback_query(F.data == "menu:main")

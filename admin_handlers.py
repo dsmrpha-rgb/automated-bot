@@ -40,6 +40,7 @@ from admin_states import (
     EditProductFSM,
     PrivateDmFSM,
     PrivateListingFSM,
+    PurchaseFSM,
     ScheduledAnnouncementFSM,
     SetBalanceFSM,
 )
@@ -1097,6 +1098,118 @@ async def set_balance_amount(message: Message, state: FSMContext):
             reply_markup=akb.admin_back_kb("admin:users"),
         )
     await state.clear()
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  PURCHASE HISTORY  (shown to users on the "history" page)
+# ══════════════════════════════════════════════════════════════════════
+
+def _purchases_text(user_id: int, items: list) -> str:
+    if not items:
+        return f"🧾 მომხმარებელი {user_id}: შესყიდვები არ არის"
+    lines = [f"🧾 მომხმარებელი {user_id} — {len(items)} შესყიდვა"]
+    for p in items[:20]:
+        lines.append(f"#{p['id']} · {p['date']} · {p['product']} · {p['price_usd']}$")
+    return "\n".join(lines)
+
+
+@router.callback_query(F.data == "admin:purchases")
+async def purchases_menu(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await state.clear()
+    await call.message.answer("🧾 შესყიდვების ისტორია", reply_markup=akb.purchases_menu_kb())
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.answer()
+
+
+@router.callback_query(F.data == "adm_pur_add")
+async def purchase_add_start(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await call.message.answer("🧾 შეიყვანეთ მომხმარებლის Telegram ID:", reply_markup=akb.admin_back_kb("admin:purchases"))
+    await state.set_state(PurchaseFSM.waiting_user_id)
+    await call.answer()
+
+
+@router.message(PurchaseFSM.waiting_user_id, F.text)
+async def purchase_user_id(message: Message, state: FSMContext):
+    try:
+        uid = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ შეიყვანეთ რიცხვი (Telegram ID):")
+        return
+    if not ds.get_user(uid):
+        await message.answer(f"❌ მომხმარებელი {uid} ვერ მოიძებნა", reply_markup=akb.admin_back_kb("admin:purchases"))
+        await state.clear()
+        return
+    await state.update_data(pur_uid=uid)
+    await message.answer("📦 პროდუქტის სახელი:")
+    await state.set_state(PurchaseFSM.waiting_product)
+
+
+@router.message(PurchaseFSM.waiting_product, F.text)
+async def purchase_product(message: Message, state: FSMContext):
+    await state.update_data(pur_product=message.text.strip()[:200])
+    await message.answer("💰 ფასი ($):")
+    await state.set_state(PurchaseFSM.waiting_price)
+
+
+@router.message(PurchaseFSM.waiting_price, F.text)
+async def purchase_price(message: Message, state: FSMContext):
+    try:
+        price = float(message.text.strip().replace(",", "."))
+    except ValueError:
+        await message.answer("❌ შეიყვანეთ რიცხვი:")
+        return
+    await state.update_data(pur_price=price)
+    await message.answer("📝 შენიშვნა (ან გაგზავნეთ „-“ გამოსატოვებლად):")
+    await state.set_state(PurchaseFSM.waiting_note)
+
+
+@router.message(PurchaseFSM.waiting_note, F.text)
+async def purchase_note(message: Message, state: FSMContext):
+    data = await state.get_data()
+    note = "" if message.text.strip() == "-" else message.text.strip()
+    pid = ds.add_purchase(data["pur_uid"], data["pur_product"], data["pur_price"], note, by="bot")
+    await state.clear()
+    await message.answer(
+        f"✅ შესყიდვა #{pid} დაემატა\n{data['pur_uid']} · {data['pur_product']} · {data['pur_price']}$",
+        reply_markup=akb.purchases_menu_kb(),
+    )
+
+
+@router.callback_query(F.data == "adm_pur_view")
+async def purchase_view_start(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    await call.message.answer("📜 შეიყვანეთ მომხმარებლის Telegram ID:", reply_markup=akb.admin_back_kb("admin:purchases"))
+    await state.set_state(PurchaseFSM.waiting_view_id)
+    await call.answer()
+
+
+@router.message(PurchaseFSM.waiting_view_id, F.text)
+async def purchase_view(message: Message, state: FSMContext):
+    try:
+        uid = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ შეიყვანეთ რიცხვი (Telegram ID):")
+        return
+    items = ds.get_user_purchases(uid, 20)
+    await state.clear()
+    await message.answer(_purchases_text(uid, items), reply_markup=akb.purchases_list_kb(items))
+
+
+@router.callback_query(F.data.startswith("adm_pur_del:"))
+async def purchase_delete(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    ds.delete_purchase(int(call.data.split(":", 1)[1]))
+    await call.message.edit_text("🗑 წაიშალა", reply_markup=akb.purchases_menu_kb())
+    await call.answer()
 
 
 # ══════════════════════════════════════════════════════════════════════

@@ -60,3 +60,12 @@ class PrivateDmFSM(StatesGroup):
     waiting_message = State()
     waiting_photo = State()
     waiting_confirm = State()
+
+
+class PurchaseFSM(StatesGroup):
+    """Record a purchase for a user: user id -> product -> price -> note."""
+    waiting_user_id = State()
+    waiting_product = State()
+    waiting_price = State()
+    waiting_note = State()
+    waiting_view_id = State()

@@ -13,6 +13,7 @@ ADMIN_MENU_ITEMS = [
     ("scheduled", "📅 დაგეგმილი", "admin:scheduled"),
     ("private", "🔒 პირადი ლისტინგი", "admin:private"),
     ("users", "👥 მომხმარებლები", "admin:users"),
+    ("purchases", "🧾 შესყიდვები", "admin:purchases"),
     ("stats", "📊 სტატისტიკა", "admin:stats"),
 ]
 
@@ -214,6 +215,23 @@ def users_menu_kb(total: int, banned_count: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="💰 ბალანსის დაყენება", callback_data="adm_user_balance")],
         [InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")],
     ])
+
+
+# ── Purchase history ───────────────────────────────────────────────────
+
+def purchases_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ შესყიდვის დამატება", callback_data="adm_pur_add")],
+        [InlineKeyboardButton(text="📜 მომხმარებლის ისტორია", callback_data="adm_pur_view")],
+        [InlineKeyboardButton(text="◀ უკან", callback_data="admin:menu")],
+    ])
+
+
+def purchases_list_kb(items: list) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=f"❌ #{p['id']} {p['product'][:28]}", callback_data=f"adm_pur_del:{p['id']}")]
+            for p in items]
+    rows.append([InlineKeyboardButton(text="◀ უკან", callback_data="admin:purchases")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # ── Stats ──────────────────────────────────────────────────────────────

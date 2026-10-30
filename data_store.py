@@ -293,6 +293,56 @@ def user_count() -> int:
     return len(data["users"])
 
 
+# ── Purchase history (recorded by admins) ─────────────────────────────
+
+def add_purchase(user_id: int, product: str, price_usd: float = 0.0,
+                 note: str = "", by: str = "bot") -> int:
+    """Record a purchase for a user. Returns the new purchase id."""
+    data = _load()
+    items = data.setdefault("purchases", [])
+    pid = max([p.get("id", 0) for p in items] + [0]) + 1
+    items.append({
+        "id": pid, "user_id": int(user_id), "product": str(product)[:200],
+        "price_usd": float(price_usd or 0), "note": str(note or "")[:300],
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M"), "by": by,
+    })
+    _save(data)
+    return pid
+
+
+def get_user_purchases(user_id: int, limit: int | None = None) -> list[dict]:
+    """A user's purchases, newest first."""
+    items = [p for p in _load().get("purchases", []) if p.get("user_id") == int(user_id)]
+    items.sort(key=lambda p: p.get("id", 0), reverse=True)
+    return items[:limit] if limit else items
+
+
+def delete_purchase(purchase_id: int) -> bool:
+    data = _load()
+    items = data.get("purchases", [])
+    kept = [p for p in items if p.get("id") != int(purchase_id)]
+    if len(kept) == len(items):
+        return False
+    data["purchases"] = kept
+    _save(data)
+    return True
+
+
+# ── Channel gate (users who passed the "join our channel" check) ───────
+
+def is_gate_ok(user_id: int) -> bool:
+    u = get_user(user_id)
+    return bool(u and u.get("gate_ok"))
+
+
+def set_gate_ok(user_id: int, ok: bool) -> None:
+    data = _load()
+    u = data["users"].get(str(user_id))
+    if u is not None:
+        u["gate_ok"] = bool(ok)
+        _save(data)
+
+
 # ── Scheduled announcements ───────────────────────────────────────────
 
 def add_scheduled_announcement(text: str, run_at: str,

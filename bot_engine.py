@@ -18,7 +18,7 @@ from config import BOT_TOKENS
 from data_store import seed_from_texts
 from deposit_monitor import start_deposit_monitor
 from admin_handlers import router as admin_router, start_scheduler
-from menu_engine import engine_router
+from menu_engine import engine_router, install_gate
 import bot_registry
 from ban_gate import install as install_ban_gate
 
@@ -63,6 +63,7 @@ async def main() -> None:
 
     dp = Dispatcher()
     install_ban_gate(dp)
+    install_gate(dp)                  # "join our channel" check (config-driven, off by default)
     dp.include_router(admin_router)   # admin callbacks first
     dp.include_router(engine_router)  # config-driven navigation
     dp.include_router(leaf_router)    # reused dynamic leaves
