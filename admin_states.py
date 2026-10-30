@@ -22,6 +22,12 @@ class DistrictImageFSM(StatesGroup):
     waiting_image = State()
 
 
+class ProductDeliveryFSM(StatesGroup):
+    """What the buyer receives after buying with balance: text, then picture/GIF/video."""
+    waiting_text = State()
+    waiting_media = State()
+
+
 class PrivateListingFSM(StatesGroup):
     """Open/create a private listing by user ID."""
     waiting_user_id = State()

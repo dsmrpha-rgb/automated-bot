@@ -225,6 +225,9 @@ CRYPTO_PAYMENT_CAPTION = (
 
 TRANSLATIONS = {
     "ka": {
+        "BUY_NOT_ENOUGH": "💰 ბალანსი საკმარისი არ არის. აკლია: {shortage}",
+        "BUY_OUT_OF_STOCK": "😕 პროდუქტი ამოიწურა",
+        "BUY_NO_PRODUCT": "❌ ჯერ აირჩიეთ პროდუქტი",
         "MAIN_MENU_CAPTION": MAIN_MENU_CAPTION,
         "CITIES_BUTTON": "🏙️ქალაქები🌆 (1)",
         "CHOOSE_CITY_TEXT": "აირჩიეთ ქალაქი:",
@@ -267,6 +270,9 @@ TRANSLATIONS = {
         },
     },
     "ru": {
+        "BUY_NOT_ENOUGH": "💰 Недостаточно средств на балансе. Не хватает: {shortage}",
+        "BUY_OUT_OF_STOCK": "😕 Товар закончился",
+        "BUY_NO_PRODUCT": "❌ Сначала выберите товар",
         "MAIN_MENU_CAPTION": (
             "Ищем🦶в любом городе ! Минимальный депозит 500 Gel\n\n"
             "Упаковка и доставка 1шт 35Gel\n"
@@ -370,6 +376,9 @@ TRANSLATIONS = {
         },
     },
     "en": {
+        "BUY_NOT_ENOUGH": "💰 Not enough balance. You are short by: {shortage}",
+        "BUY_OUT_OF_STOCK": "😕 This product is out of stock",
+        "BUY_NO_PRODUCT": "❌ Pick a product first",
         "MAIN_MENU_CAPTION": (
             "Looking for🦶in any city! Minimum Deposit 500 Gel\n\n"
             "1pc packaging & delivery 35Gel\n"

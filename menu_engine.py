@@ -30,6 +30,11 @@ Button actions (stored per button)
   choose:<var>:<value>:<page>     set a session var, then navigate
                                   (value "@" = the pressed button's own label)
   confirm:<page>                  ping admins ("user paid"), then navigate
+  buy:<ok>[:<low>]                (hidden while the balance is below the picked product's price,
+                                  unless the button has "always": true)
+                                  buy the picked product with the user's balance, deliver its
+                                  delivery text/picture, then show <ok>; <low> (optional) is shown
+                                  when the balance is too small ({shortage}), else a popup
   builtin:<key>                   legacy delegate (products/balance/language)
   url:<https-url>                 open a URL
   admin                           open the admin menu (admins only; hidden for others)
@@ -100,7 +105,7 @@ BUILTINS: dict[str, str] = {
 }
 
 # values shown with the bot's currency symbol once a currency is configured
-_MONEY_VARS = ("balance", "price", "product_price", "amount", "purchase_total", "earned")
+_MONEY_VARS = ("balance", "price", "product_price", "amount", "purchase_total", "earned", "shortage")
 
 ADMIN_BUTTON_TEXT = "⚙ ადმინ პანელი"
 ADMIN_BUTTON_CB = "admin:menu"
@@ -238,6 +243,18 @@ def _label(btn: dict, lang: str, default_lang: str, ctx: dict) -> str:
     return text
 
 
+def _can_buy(uid: int) -> bool:
+    """True when the picked product exists, is in stock and the user's balance covers its price."""
+    try:
+        slug = _sess(uid)["vars"].get("product")
+        product = ds.get_product(slug) if slug else None
+        if not product or not ds.product_allowed(uid, slug) or product.get("quantity", -1) == 0:
+            return False
+        return ds.get_user_balance(uid) + 1e-9 >= float(product.get("price_usd", 0) or 0)
+    except Exception:
+        return False
+
+
 def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int, row_offset: int = 0) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for row in page.get("rows", []):
@@ -247,6 +264,8 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int, row
             action = str(btn.get("action", "noop"))
             if action.startswith("url:"):
                 built.append(InlineKeyboardButton(text=label, url=action[4:]))
+            elif action.startswith("buy:") and not btn.get("always") and not _can_buy(uid):
+                continue    # picked product costs more than the balance (or none picked / sold out)
             elif action == "admin":
                 if uid in ADMIN_IDS:
                     built.append(InlineKeyboardButton(text=label, callback_data=ADMIN_BUTTON_CB))
@@ -258,7 +277,7 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int, row
                 _, var, _v, target = action.split(":", 3)
                 built.append(InlineKeyboardButton(
                     text=label, callback_data=f"choose:{var}:@{len(rows) + row_offset}.{len(built)}:{target}"))
-            elif action.startswith("page:") or action.startswith("choose:") or action.startswith("confirm:"):
+            elif action.startswith("page:") or action.startswith("choose:") or action.startswith("confirm:") or action.startswith("buy:"):
                 built.append(InlineKeyboardButton(text=label, callback_data=action))
             else:
                 built.append(InlineKeyboardButton(text=label, callback_data="noop"))
@@ -902,6 +921,86 @@ async def engine_choose(callback: CallbackQuery) -> None:
     v[var] = value
     await render_page(callback, page)
     await callback.answer()
+
+
+async def _send_delivery(bot, uid: int, product: dict) -> None:
+    """Deliver what the buyer paid for: the product's delivery text and picture/GIF/video."""
+    text = (product.get("delivery_text") or "").strip()
+    img = _image_path((product.get("delivery_image") or "").strip())
+    try:
+        if img:
+            kind = _media_kind(img)
+            cap = text if len(text) <= 1024 else None
+            if kind == "video":
+                await bot.send_video(uid, FSInputFile(img), caption=cap)
+            elif kind == "animation":
+                await bot.send_animation(uid, FSInputFile(img), caption=cap)
+            else:
+                await bot.send_photo(uid, FSInputFile(img), caption=cap)
+            if text and cap is None:
+                await bot.send_message(uid, text)
+        elif text:
+            await bot.send_message(uid, text)
+    except Exception:
+        import logging
+        logging.exception("Failed to deliver product %s to %s", product.get("name"), uid)
+
+
+@engine_router.callback_query(F.data.startswith("buy:"))
+async def engine_buy(callback: CallbackQuery) -> None:
+    """buy:<ok_page>[:<low_balance_page>] — buy the picked product with the user's balance,
+    then deliver its text/picture (same flow as the Nestle bot)."""
+    import texts
+    parts = callback.data.split(":")
+    ok_page = parts[1] if len(parts) > 1 else ""
+    low_page = parts[2] if len(parts) > 2 else ""
+    uid = callback.from_user.id
+    cfg = load_config()
+    lang = _lang(uid, cfg)
+    v = _sess(uid)["vars"]
+    slug = v.get("product")
+    product = ds.get_product(slug) if slug else None
+    if not product or not ds.product_allowed(uid, slug):
+        await callback.answer(texts.t("BUY_NO_PRODUCT", lang), show_alert=True)
+        return
+    price = float(product.get("price_usd", 0) or 0)
+    balance = ds.get_user_balance(uid)
+    if balance + 1e-9 < price:
+        v["shortage"] = round(price - balance, 2)
+        shortage = settings_store.format_amount(v["shortage"]) if settings_store.currency() else v["shortage"]
+        if low_page:
+            await render_page(callback, low_page)
+            await callback.answer()
+        else:
+            await callback.answer(texts.t("BUY_NOT_ENOUGH", lang).format(shortage=shortage), show_alert=True)
+        return
+    if product.get("quantity", -1) == 0:
+        await callback.answer(texts.t("BUY_OUT_OF_STOCK", lang), show_alert=True)
+        return
+    if not ds.deduct_balance(uid, price):
+        await callback.answer(texts.t("BUY_NOT_ENOUGH", lang).format(shortage=price), show_alert=True)
+        return
+    ds.take_stock(slug)
+    note = " · ".join(f"{k}: {v[x]}" for k, x in (("city", "city_name"), ("category", "category_name"),
+                      ("district", "district_name"), ("variant", "variant")) if v.get(x))
+    try:
+        ds.add_purchase(uid, product.get("name", slug), price, note, by="balance")
+        ds.increment_order(price)
+    except Exception:
+        pass
+    un = f"@{callback.from_user.username}" if callback.from_user.username else "no-username"
+    admin_note = (f"🛒 {un} (id {uid}) bought “{product.get('name', slug)}” for "
+                  f"{settings_store.format_amount(price)} from balance." + (f"\n{note}" if note else ""))
+    for admin_id in ADMIN_IDS:
+        try:
+            await callback.bot.send_message(admin_id, admin_note)
+        except Exception:
+            pass
+    v["price"] = price
+    if ok_page:
+        await render_page(callback, ok_page)
+    await callback.answer()
+    await _send_delivery(callback.bot, uid, product)
 
 
 @engine_router.callback_query(F.data.startswith("confirm:"))

@@ -85,6 +85,7 @@ def product_edit_kb(slug: str) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="💰 ფასი", callback_data=f"adm_pe:price:{slug}")],
         [InlineKeyboardButton(text="📝 აღწერა", callback_data=f"adm_pe:desc:{slug}"),
          InlineKeyboardButton(text="📦 რაოდენობა", callback_data=f"adm_pe:qty:{slug}")],
+        [InlineKeyboardButton(text="📦 მიწოდება (ტექსტი/სურათი)", callback_data=f"adm_pdel:{slug}")],
         [InlineKeyboardButton(text="🗺 უბნების მინიჭება", callback_data=f"adm_pd:{slug}"),
          InlineKeyboardButton(text="🗂 კატეგორია", callback_data=f"adm_pcat:{slug}")],
         [InlineKeyboardButton(text="◀ უკან", callback_data="admin:products")],

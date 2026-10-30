@@ -331,6 +331,32 @@ def set_user_balance(user_id: int, amount: float) -> bool:
     return False
 
 
+def deduct_balance(user_id: int, amount: float) -> bool:
+    """Take `amount` from the balance if there is enough (all-or-nothing). True when charged."""
+    data = _load()
+    u = data["users"].get(str(user_id))
+    if u is None or float(u.get("balance", 0.0)) + 1e-9 < float(amount):
+        return False
+    u["balance"] = round(float(u.get("balance", 0.0)) - float(amount), 2)
+    _save(data)
+    return True
+
+
+def take_stock(slug: str) -> bool:
+    """Reduce a product's stock by one. False when it is out of stock (quantity 0); -1 = unlimited."""
+    data = _load()
+    p = data["products"].get(slug)
+    if p is None:
+        return False
+    qty = p.get("quantity", -1)
+    if qty == 0:
+        return False
+    if qty > 0:
+        p["quantity"] = qty - 1
+        _save(data)
+    return True
+
+
 def user_count() -> int:
     data = _load()
     return len(data["users"])

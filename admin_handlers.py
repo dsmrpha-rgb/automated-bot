@@ -43,6 +43,7 @@ from admin_states import (
     EditProductFSM,
     PrivateDmFSM,
     PrivateListingFSM,
+    ProductDeliveryFSM,
     PurchaseFSM,
     ScheduledAnnouncementFSM,
     SetBalanceFSM,
@@ -539,6 +540,72 @@ async def add_district_image(message: Message, state: FSMContext):
         f"✅ უბანი დამატებულია: {data['dist_name']}{img_text}",
         reply_markup=akb.admin_back_kb("admin:districts"),
     )
+
+
+@router.callback_query(F.data.startswith("adm_pdel:"))
+async def product_delivery_start(call: CallbackQuery, state: FSMContext):
+    if not _is_admin(call.from_user.id):
+        return
+    slug = call.data.split(":", 1)[1]
+    product = ds.get_product(slug)
+    if not product:
+        await call.answer("❌", show_alert=True)
+        return
+    await state.update_data(del_slug=slug)
+    await state.set_state(ProductDeliveryFSM.waiting_text)
+    await call.message.answer(
+        f"📦 {product['name']}\n\nამჟამინდელი ტექსტი: {(product.get('delivery_text') or '—')}\n"
+        f"სურათი: {(product.get('delivery_image') or '—')}\n\n"
+        "გამოაგზავნეთ მიწოდების ტექსტი (ის, რასაც მყიდველი ყიდვის შემდეგ მიიღებს).\n"
+        "„.“ — დატოვოს ძველი · „-“ — წაშალოს.",
+        reply_markup=akb.admin_back_kb("admin:products"),
+    )
+    await call.answer()
+
+
+@router.message(ProductDeliveryFSM.waiting_text, F.text)
+async def product_delivery_text(message: Message, state: FSMContext):
+    text = message.text.strip()
+    data = await state.get_data()
+    product = ds.get_product(data.get("del_slug", "")) or {}
+    if text == ".":
+        text = product.get("delivery_text", "")
+    elif text == "-":
+        text = ""
+    await state.update_data(del_text=text)
+    await state.set_state(ProductDeliveryFSM.waiting_media)
+    await message.answer("🖼 გამოაგზავნეთ ფოტო / GIF / ვიდეო (ან არსებული ფაილის სახელი).\n„.“ — დატოვოს ძველი · „-“ — წაშალოს.",
+                         reply_markup=akb.admin_back_kb("admin:products"))
+
+
+async def _finish_delivery(message: Message, state: FSMContext, image: str):
+    data = await state.get_data()
+    slug = data.get("del_slug", "")
+    ok = ds.update_product(slug, delivery_text=data.get("del_text", ""), delivery_image=image)
+    await state.clear()
+    await message.answer("✅ მიწოდება განახლდა" if ok else "❌ პროდუქტი ვერ მოიძებნა",
+                         reply_markup=akb.admin_back_kb(f"adm_prod_edit:{slug}"))
+
+
+@router.message(ProductDeliveryFSM.waiting_media, F.photo | F.animation | F.video)
+async def product_delivery_media(message: Message, state: FSMContext):
+    data = await state.get_data()
+    image = await _save_district_media(message, "delivery" + re.sub(r"[^a-z0-9]", "", data.get("del_slug", "").lower())[-6:]) or ""
+    await _finish_delivery(message, state, image)
+
+
+@router.message(ProductDeliveryFSM.waiting_media, F.text)
+async def product_delivery_media_text(message: Message, state: FSMContext):
+    text = message.text.strip()
+    data = await state.get_data()
+    if text == ".":
+        image = (ds.get_product(data.get("del_slug", "")) or {}).get("delivery_image", "")
+    else:
+        image = _typed_district_image(text)
+        if image is None:
+            await message.answer("❌ ასეთი ფაილი ვერ მოიძებნა. გამოაგზავნეთ ფოტო, ფაილის სახელი, „.“ ან „-“:")
+            return
+    await _finish_delivery(message, state, image)
 
 
 @router.callback_query(F.data.startswith("adm_dist_img:"))
