@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block body %}
+<section class="box head"><div><div class="kick">Заказ #{{ o.id }}</div><h1>{{ o.product }}</h1><div class="sub">{{ o.note }} · {{ o.date }} · {{ money(o.price_usd) }}</div></div><a class="btn2" href="{{ url_for('account') }}">👈 Back - უკან</a></section>
+<section class="box" style="padding:18px"><h3 style="margin:0">Your order - თქვენი შეკვეთა ✅</h3>
+{% if dv.text or dv.image %}<div class="dl">{% if dv.text %}{{ dv.text }}{% endif %}{% if dv.image %}{% if dv.image.lower().endswith(('.mp4','.mov','.webm','.m4v')) %}<video src="{{ url_for('order_file', pid=o.id) }}" controls playsinline></video>{% else %}<img src="{{ url_for('order_file', pid=o.id) }}" alt="">{% endif %}{% endif %}</div>{% else %}<div class="sub" style="margin:10px 0">An admin will send the details soon.</div>{% endif %}
+<h3 style="margin:18px 0 6px;font-size:13px">Leave a review - დაწერეთ შეფასება</h3>
+<form method="post" action="{{ url_for('review', pid=o.id) }}" class="f" style="padding:0;max-width:520px"><input type="hidden" name="csrf" value="{{ csrf }}">
+<input name="text" maxlength="600" placeholder="Your comment - თქვენი კომენტარი" required><button class="btn">Send - გაგზავნა</button></form></section>
+{% endblock %}

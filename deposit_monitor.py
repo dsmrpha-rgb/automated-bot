@@ -18,6 +18,7 @@ import bot_registry
 import data_store as ds
 import texts
 from config import ADMIN_IDS, CRYPTO_WALLETS
+import notify
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +269,7 @@ async def _notify_admins_deposit(bot, coin: str, amount: float,
         required=required,
         status=status,
     )
-    for admin_id in ADMIN_IDS:
+    for admin_id in notify.recipients("deposit_received"):
         await bot_registry.send_message_all_bots(
             chat_id=admin_id,
             text=text,

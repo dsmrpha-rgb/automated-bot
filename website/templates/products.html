@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
+{{ head(crumb=crumb, back=url_for('city_page', city=city) if cat != '-' else url_for('index'), city=city) }}
+<div class="prods">{% for k, p, cr in rows %}
+ <div class="box prod"><div class="pic" style="background:#1a1320 center/cover"><img src="{{ product_image(p, cobj) }}" alt="" style="width:100%;height:100%;object-fit:cover">{% if p.weight %}<span class="tag">Weight - წონა: {{ p.weight }}</span>{% endif %}</div>
+  <div class="in"><div class="k">ТОВАР</div><div class="t">{{ p.name }}</div>
+   <div class="pair"><div><small>Стоимость</small><b>{{ money(p.price_usd) }}</b></div><div><small>В криптовалюте</small><b>{{ cr or '—' }}</b></div></div>
+   <div class="foot"><span class="stock {{ 'no' if p.quantity == 0 }}">{{ 'Нет в наличии' if p.quantity == 0 else 'В наличии' }}</span>
+   {% if p.quantity != 0 %}<a class="btn" href="{{ url_for('variants', slug=k) }}">Choose District - აირჩიეთ უბანი →</a>{% endif %}</div></div></div>
+{% else %}<div class="box" style="padding:20px;grid-column:1/-1">Nothing here yet.</div>{% endfor %}</div>
+<section class="box revs"><div class="revhead"><div><div class="kick">— Отзывы покупателей</div><h2>Голоса клиентов</h2>
+ <div class="sub">Реальные впечатления о покупках, качестве и сервисе.</div><div class="sub" style="margin-top:8px">✓ Публикуем отзывы после модерации</div></div>
+ <div class="count"><b>{{ total }}</b><small>отзывов</small></div></div>
+<div class="rgrid">{% for r in revs %}<div class="rev"><div class="u"><span class="av">{{ r.login[:1]|upper }}</span><div><b>{{ r.login }}</b><small>{{ r.city }}</small></div>{% if r.purchase %}<span class="badge">✓ Покупка</span>{% endif %}</div>
+ {% if r.district %}<div class="loc">{{ r.city }}-{{ r.district }}</div>{% endif %}<p>{{ r.text }}</p>
+ <div class="m"><span><small>ПОКУПКА</small><br>{{ r.product }}</span><span>{{ r.date }}</span></div></div>{% else %}<div class="sub" style="grid-column:1/-1">No reviews yet.</div>{% endfor %}</div>
+{% if pages > 1 %}<div class="pager">{% for n in range(1, pages + 1) %}{% if n == page %}<span class="on">{{ n }}</span>{% elif n <= 5 or n == pages %}<a href="?rp={{ n }}">{{ n }}</a>{% elif n == 6 %}<span>…</span>{% endif %}{% endfor %}{% if page < pages %}<a href="?rp={{ pages }}">Последняя »</a>{% endif %}</div>{% endif %}</section>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
+{{ head(back=url_for('index'), city=city) }}
+<div class="grid">{% for k, c in cats.items() %}
+ <a class="box card" href="{{ url_for('products', city=city, cat=k) }}"><div class="pic"><img src="{{ media(c.image) if c.image else url_for('static', filename='gift.svg') }}" alt=""><span class="tag">Категория</span></div>
+ <div class="nm">{{ c.name }}</div><span class="btn go">Choose Product - აირჩიეთ პროდუქტი</span></a>{% endfor %}</div>
+{% endblock %}

@@ -151,6 +151,17 @@ def delete_product(slug: str) -> bool:
     return False
 
 
+VARIANT_KEYS = ("land", "building")
+
+
+def product_variants(product: dict) -> list[str]:
+    """Variants a product is sold as: 'land' (buried in a district) / 'building'. Unset = both."""
+    v = product.get("variants")
+    if not isinstance(v, list):
+        return list(VARIANT_KEYS)
+    return [k for k in VARIANT_KEYS if k in v]
+
+
 def get_product(slug: str) -> dict | None:
     data = _load()
     return data["products"].get(slug)

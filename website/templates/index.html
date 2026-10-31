@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<section class="sec"><div class="kick">Каталог</div><h1>City - ქალაქები 🗼</h1>
+<p>Choose the city in which you want to place an order - აირჩიეთ ქალაქი სადაც გინდათ შეკვეთა</p></section>
+<div class="grid">{% for c in cities %}
+  <a class="box card" href="{{ url_for('city_page', city=c.name) }}">
+    <div class="pic" style="background-image:linear-gradient(180deg,#0a1530,#1b2a55)">{% if c.image %}<img src="{{ media(c.image) }}" alt="">{% endif %}<span class="tag">Город</span></div>
+    <div class="nm">{{ c.name|capitalize }}</div><span class="btn go">Choose Product - აირჩიეთ პროდუქტი →</span></a>
+{% else %}<div class="box" style="padding:20px;grid-column:1/-1">No cities yet.</div>{% endfor %}</div>
+<section class="sec" style="margin-top:34px"><div class="kick">Связь</div><h1>Полезные ссылки</h1></section>
+<div class="links">{% for g in site.links %}<div class="lk"><div class="ic">{{ g.icon or '↗' }}</div><b>{{ g.title }}</b>{% for l in g['items'] %}<a href="{{ l if l.startswith('http') else 'https://' + l }}" target="_blank" rel="noopener">{{ l }}</a>{% endfor %}</div>{% endfor %}</div>
+{% endblock %}

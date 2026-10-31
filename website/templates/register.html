@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block body %}
+<div class="box auth"><h1>Sign Up - შესვლა</h1>
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label style="text-align:center">Login - ლოგინი</label><input name="login" autocomplete="username" required autofocus pattern="[A-Za-z0-9_.\-]{3,32}">
+<label style="text-align:center">Pass - პაროლი</label><input name="password" type="password" autocomplete="new-password" placeholder="Enter Password - შეიყვანეთ პაროლი" minlength="6" required>
+<label style="text-align:center">Confirm password - დაადასტურეთ პაროლი</label><input name="password2" type="password" autocomplete="new-password" placeholder="Confirm Password - დაადასტურეთ პაროლი" minlength="6" required>
+<button class="go">Registration - რეგისტრაცია</button></form>
+<div class="note">Confirm Registration - დაადასტურეთ რეგისტრაცია</div></div>
+{% endblock %}

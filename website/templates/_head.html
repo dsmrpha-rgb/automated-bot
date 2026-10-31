@@ -1,0 +1,7 @@
+{% macro head(title='MENU LIST', crumb=None, back=None, city=None) %}
+<section class="box head"><div>
+  <div class="kick">Каталог</div>
+  <h1>🧋 {{ title }} 🧋</h1>
+  <div class="sub">{% if crumb %}{% for label, val in crumb %}{% if not loop.first %}<i>/</i>{% endif %}{{ label }}: {{ val }}{% endfor %}{% elif city %}Город: {{ city|capitalize }}{% endif %}</div>
+</div>{% if back %}<a class="btn2" href="{{ back }}">👈 Back - უკან</a>{% endif %}</section>
+{% endmacro %}

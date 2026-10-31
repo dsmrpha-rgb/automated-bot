@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
+{{ head(crumb=crumb, back=url_for('products', city=p.city, cat=p.category if p.category else '-')) }}
+<div class="grid">{% for v in vs %}
+ <a class="box card" href="{{ url_for('districts', slug=slug, variant=v) }}"><div class="pic"><img src="{{ product_image(p, cat) }}" alt="">{% if p.weight %}<span class="tag r">Weight - წონა: {{ p.weight }}</span>{% endif %}<span class="price">{{ money(p.price_usd) }}</span></div>
+ <div class="nm">{{ VARIANTS[v] }}</div><span class="btn go">Choose District - აირჩიეთ უბანი</span></a>{% endfor %}</div>
+{% endblock %}

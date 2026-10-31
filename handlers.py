@@ -7,6 +7,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 
 import bot_registry
+import notify
 import data_store as ds
 import settings_store
 import keyboards
@@ -63,7 +64,7 @@ async def _notify_admins_new_user(bot, user) -> None:
         username=username,
         user_id=user.id,
     )
-    for admin_id in ADMIN_IDS:
+    for admin_id in notify.recipients("new_user"):
         await bot_registry.send_message_all_bots(chat_id=admin_id, text=text)
 
 
@@ -326,6 +327,9 @@ async def on_deposit_crypto(callback: CallbackQuery) -> None:
     except Exception:
         pass
 
+    u = callback.from_user
+    await notify.send(callback.bot, "topup_started",
+                      f"💳 Top-up initiated: {'@' + u.username if u.username else u.full_name} (id {u.id}) opened the {crypto} deposit address.")
     qr_path = generate_qr(wallet_address, crypto)
 
     caption = texts.BALANCE_DEPOSIT_CAPTION.format(

@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
+<section class="box head"><div><div class="kick">Аккаунт</div><h1>👤 {{ me.login }}</h1><div class="sub">Balance - ბალანსი: <b style="color:var(--tx)">{{ money(me.balance) }}</b></div></div><a class="btn2" href="{{ url_for('index') }}">👈 Catalog - კატალოგი</a></section>
+<div class="acc">
+ <section class="box"><h3>Fill up Balance - შეავსეთ ბალანსი</h3>
+  <div class="sub">Send crypto to a wallet below, then press the button — an admin credits your balance after the payment is confirmed.</div>
+  {% for c, w in wallets.items() %}<div class="sub" style="margin-top:10px"><b style="color:var(--tx)">{{ c }}</b></div><div class="wal">{{ w }}</div>{% else %}<div class="sub">No wallets configured.</div>{% endfor %}
+  <form method="post" action="{{ url_for('topup') }}" class="f" style="padding:0"><input type="hidden" name="csrf" value="{{ csrf }}">
+   <select name="coin">{% for c in wallets %}<option>{{ c }}</option>{% endfor %}</select><input name="txid" placeholder="Transaction id (optional)" maxlength="100"><button class="btn big">I paid - გადავრიცხე</button></form></section>
+ <section class="box"><h3>My orders - ჩემი შეკვეთები</h3>
+  <table class="o">{% for o in orders %}<tr><td>#{{ o.id }}</td><td><a href="{{ url_for('order', pid=o.id) }}" style="color:var(--teal)">{{ o.product }}</a><br><span class="sub">{{ o.note }}</span></td><td>{{ money(o.price_usd) }}</td><td class="sub">{{ o.date }}</td></tr>
+  {% else %}<tr><td class="sub">No orders yet.</td></tr>{% endfor %}</table></section>
+</div>
+{% endblock %}

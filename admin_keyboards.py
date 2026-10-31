@@ -85,11 +85,19 @@ def product_edit_kb(slug: str) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="💰 ფასი", callback_data=f"adm_pe:price:{slug}")],
         [InlineKeyboardButton(text="📝 აღწერა", callback_data=f"adm_pe:desc:{slug}"),
          InlineKeyboardButton(text="📦 რაოდენობა", callback_data=f"adm_pe:qty:{slug}")],
-        [InlineKeyboardButton(text="📦 მიწოდება (ტექსტი/სურათი)", callback_data=f"adm_pdel:{slug}")],
+        [InlineKeyboardButton(text="📦 მიწოდება (ტექსტი/სურათი)", callback_data=f"adm_pdel:{slug}"),
+         InlineKeyboardButton(text="🧱 ვარიანტები", callback_data=f"adm_pv:{slug}")],
         [InlineKeyboardButton(text="🗺 უბნების მინიჭება", callback_data=f"adm_pd:{slug}"),
          InlineKeyboardButton(text="🗂 კატეგორია", callback_data=f"adm_pcat:{slug}")],
         [InlineKeyboardButton(text="◀ უკან", callback_data="admin:products")],
     ])
+
+
+def product_variants_kb(slug: str, active: list[str]) -> InlineKeyboardMarkup:
+    names = (("land", "მიწა უბანი / BURRIED IN DISTRICT"), ("building", "კორპუსი / BUILDING"))
+    rows = [[InlineKeyboardButton(text=("✅ " if k in active else "⬜ ") + n, callback_data=f"adm_pv_t:{slug}|{k}")] for k, n in names]
+    rows.append([InlineKeyboardButton(text="◀ უკან", callback_data=f"adm_prod_edit:{slug}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def product_districts_kb(slug: str, all_districts: dict, assigned: list[str]) -> InlineKeyboardMarkup:

@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
+{{ head(crumb=crumb, back=url_for('variants', slug=slug)) }}
+<div class="grid">{% for k, d in ds_.items() %}
+ <a class="box card" href="{{ url_for('checkout', p=slug, v=variant, d=k) }}"><div class="pic"><img src="{{ media(d.image) if d.image else product_image(p, cat) }}" alt=""><span class="tag">Район</span></div>
+ <div class="nm">{{ d.name }}</div><span class="btn go">Select - არჩევა</span></a>{% endfor %}</div>
+{% endblock %}

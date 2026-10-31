@@ -30,6 +30,8 @@ Button actions (stored per button)
   choose:<var>:<value>:<page>     set a session var, then navigate
                                   (value "@" = the pressed button's own label)
   confirm:<page>                  ping admins ("user paid"), then navigate
+  setlang:<code>[:<page>]         switch the user's language (must be one of the bot's languages),
+                                  then open <page> (default: the start screen)
   buy:<ok>[:<low>]                (hidden while the balance is below the picked product's price,
                                   unless the button has "always": true)
                                   buy the picked product with the user's balance, deliver its
@@ -93,6 +95,7 @@ from aiogram.types import (
 import data_store as ds
 import settings_store
 from config import ADMIN_IDS
+import notify
 
 _BASE_DIR = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(_BASE_DIR, "menu_config.json")
@@ -266,6 +269,16 @@ def _can_buy(uid: int) -> bool:
         return False
 
 
+def _variant_ok(uid: int, key: str) -> bool:
+    """A button tagged only_variant shows when the picked product offers that variant (no variants set = both)."""
+    try:
+        slug = _sess(uid)["vars"].get("product")
+        product = ds.get_product(slug) if slug else None
+        return not product or key in ds.product_variants(product)
+    except Exception:
+        return True
+
+
 def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int, row_offset: int = 0) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for row in page.get("rows", []):
@@ -273,6 +286,8 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int, row
         for btn in row:
             label = _label(btn, lang, default_lang, ctx)
             action = str(btn.get("action", "noop"))
+            if btn.get("only_variant") and not _variant_ok(uid, str(btn["only_variant"])):
+                continue    # the picked product doesn't offer this variant
             if action.startswith("url:"):
                 built.append(InlineKeyboardButton(text=label, url=action[4:]))
             elif action.startswith("buy:") and not btn.get("always") and not _can_buy(uid):
@@ -288,7 +303,7 @@ def _keyboard(page: dict, lang: str, default_lang: str, ctx: dict, uid: int, row
                 _, var, _v, target = action.split(":", 3)
                 built.append(InlineKeyboardButton(
                     text=label, callback_data=f"choose:{var}:@{len(rows) + row_offset}.{len(built)}:{target}"))
-            elif action.startswith("page:") or action.startswith("choose:") or action.startswith("confirm:") or action.startswith("buy:"):
+            elif action.startswith("page:") or action.startswith("choose:") or action.startswith("confirm:") or action.startswith("buy:") or action.startswith("setlang:"):
                 built.append(InlineKeyboardButton(text=label, callback_data=action))
             else:
                 built.append(InlineKeyboardButton(text=label, callback_data="noop"))
@@ -480,6 +495,7 @@ async def _compute_receipt(page: dict, uid: int) -> tuple[str | None, dict]:
 
     v.update({
         "coin": coin, "wallet": wallet, "crypto_amount": crypto_amount,
+        "crypto_price": _crypto_plain(coin, crypto_amount),
         "usd_amount": usd_amount, "amount": amount, "request_id": v[rid_var],
     })
 
@@ -678,6 +694,13 @@ def _crypto_text(coin: str, value: float) -> str:
         return f"{value:.2f}"
     out = f"{value:.8f}".rstrip("0")
     return out + "0" if out.endswith(".") else out
+
+
+def _crypto_plain(coin: str, value: float) -> str:
+    """Amount to pay without padding zeros: 35 USDT, 35.5 USDT, 0.00123 BTC."""
+    from crypto_rates import _is_stable
+    out = f"{value:.2f}" if _is_stable(coin) else f"{value:.8f}"
+    return out.rstrip("0").rstrip(".") or "0"
 
 
 async def _crypto_ctx(page: dict, raw_text: str, lang: str, default_lang: str, uid: int, ctx: dict) -> None:
@@ -895,6 +918,10 @@ async def engine_start(message: Message) -> None:
     except Exception:
         pass
     uid = message.from_user.id
+    if is_new:
+        u = message.from_user
+        await notify.send(message.bot, "new_user", f"🆕 New user: {u.full_name or 'Unknown'} "
+                          f"({'@' + u.username if u.username else 'no username'}) · id {uid}")
     if is_new and settings_store.referral():     # /start <inviter id>: remember who invited this user
         payload = (message.text or "").split(maxsplit=1)
         if len(payload) == 2 and payload[1].strip().isdigit():
@@ -1003,6 +1030,29 @@ async def engine_choose(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+async def _switch_language(callback: CallbackQuery, code: str, page: str = "") -> None:
+    cfg = load_config()
+    code = code.strip().lower()
+    if code in [str(l).lower() for l in cfg.get("langs", [])]:
+        ds.set_user_lang(callback.from_user.id, code)
+    _sess(callback.from_user.id)["await"] = None
+    await render_page(callback, page or cfg.get("start_page", "main"))
+    await callback.answer()
+
+
+@engine_router.callback_query(F.data.startswith("setlang:"))
+async def engine_setlang(callback: CallbackQuery) -> None:
+    # setlang:<code>[:<page>] — switch the user's language, then open <page> (default: the start screen)
+    parts = callback.data.split(":")
+    await _switch_language(callback, parts[1] if len(parts) > 1 else "", parts[2] if len(parts) > 2 else "")
+
+
+@engine_router.callback_query(F.data.startswith("lang:"))
+async def engine_legacy_lang(callback: CallbackQuery) -> None:
+    # the built-in "Language" picker's buttons: switch, then back to the start screen
+    await _switch_language(callback, callback.data.split(":", 1)[1])
+
+
 async def _pay_referral_bonus(bot, uid: int, price: float) -> None:
     """Referral programme: the user's inviter earns a percentage of every purchase."""
     prog = settings_store.referral()
@@ -1087,11 +1137,7 @@ async def engine_buy(callback: CallbackQuery) -> None:
     un = f"@{callback.from_user.username}" if callback.from_user.username else "no-username"
     admin_note = (f"🛒 {un} (id {uid}) bought “{product.get('name', slug)}” for "
                   f"{settings_store.format_amount(price)} from balance." + (f"\n{note}" if note else ""))
-    for admin_id in ADMIN_IDS:
-        try:
-            await callback.bot.send_message(admin_id, admin_note)
-        except Exception:
-            pass
+    await notify.send(callback.bot, "purchase", admin_note)
     v["price"] = price
     await _pay_referral_bonus(callback.bot, uid, price)
     if ok_page:
@@ -1117,11 +1163,7 @@ async def engine_confirm(callback: CallbackQuery) -> None:
               ("Product", "product_name"), ("District", "district_name"), ("Variant", "variant")) if v.get(key)]
     if picked:
         text += "\n" + " · ".join(picked)
-    for admin_id in ADMIN_IDS:
-        try:
-            await callback.bot.send_message(admin_id, text)
-        except Exception:
-            pass
+    await notify.send(callback.bot, "paid_pressed", text)
     await render_page(callback, page)
     await callback.answer()
 

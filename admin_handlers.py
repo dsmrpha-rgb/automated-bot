@@ -306,6 +306,40 @@ async def edit_product_menu(call: CallbackQuery, state: FSMContext):
     await call.answer()
 
 
+@router.callback_query(F.data.startswith("adm_pv:"))
+async def product_variants_menu(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    slug = call.data.split(":", 1)[1]
+    product = ds.get_product(slug)
+    if not product:
+        await call.answer("❌", show_alert=True)
+        return
+    await call.message.edit_text(
+        f"🧱 {product['name']}\n\nარჩეული ვარიანტები გამოჩნდება მყიდველთან (მინიმუმ ერთი).",
+        reply_markup=akb.product_variants_kb(slug, ds.product_variants(product)))
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("adm_pv_t:"))
+async def product_variants_toggle(call: CallbackQuery):
+    if not _is_admin(call.from_user.id):
+        return
+    slug, key = call.data.split(":", 1)[1].rsplit("|", 1)
+    product = ds.get_product(slug)
+    if not product or key not in ds.VARIANT_KEYS:
+        await call.answer("❌", show_alert=True)
+        return
+    cur = ds.product_variants(product)
+    new = [k for k in ds.VARIANT_KEYS if (k in cur) != (k == key)]
+    if not new:
+        await call.answer("მინიმუმ ერთი ვარიანტი უნდა იყოს", show_alert=True)
+        return
+    ds.update_product(slug, variants=new)
+    await call.message.edit_reply_markup(reply_markup=akb.product_variants_kb(slug, new))
+    await call.answer()
+
+
 @router.callback_query(F.data.startswith("adm_pe:"))
 async def edit_product_field(call: CallbackQuery, state: FSMContext):
     if not _is_admin(call.from_user.id):
