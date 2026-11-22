@@ -1,0 +1,766 @@
+{% extends "base.html" %}
+{% block title %}Global Admin{% endblock %}
+{% block content %}
+<style>
+  .ga-top { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  .ga-top select, .ga-in, .ga-ta { background:var(--bg3); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:13px; }
+  .ga-ta { width:100%; min-height:110px; font-family:inherit; }
+  .ga-tabs { display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid var(--border); margin-bottom:16px; }
+  .ga-tab { background:none; border:none; color:var(--text2); padding:10px 16px; cursor:pointer; font-size:14px; border-bottom:2px solid transparent; }
+  .ga-tab.on { color:var(--accent2); border-color:var(--accent2); }
+  .ga-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .ga-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; cursor:pointer; }
+  .ga-card:hover { border-color:var(--accent); }
+  .ga-card h3 { font-size:15px; margin-bottom:8px; }
+  .ga-kv { display:flex; justify-content:space-between; font-size:13px; color:var(--text2); padding:2px 0; }
+  .ga-kv b { color:var(--text); }
+  .ga-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .ga-table th { text-align:left; color:var(--text2); font-weight:500; padding:8px; border-bottom:1px solid var(--border); cursor:pointer; white-space:nowrap; }
+  .ga-table td { padding:8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .ga-table tr:hover td { background:var(--bg3); }
+  .ga-badge { padding:2px 8px; border-radius:10px; font-size:11px; }
+  .b-alive { background:rgba(0,184,148,.18); color:var(--green); }
+  .b-dead { background:rgba(225,112,85,.18); color:var(--red); }
+  .b-unchecked { background:var(--bg3); color:var(--text2); }
+  .b-banned { background:rgba(253,203,110,.18); color:var(--yellow); }
+  .ga-bar { height:8px; background:var(--bg3); border-radius:4px; overflow:hidden; margin:6px 0; }
+  .ga-bar > div { height:100%; background:var(--accent); transition:width .3s; }
+  .ga-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .ga-label { font-size:12px; color:var(--text2); display:block; margin:8px 0 4px; }
+  .ga-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:300; padding:16px; }
+  .ga-modal { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:20px; width:520px; max-width:100%; max-height:90vh; overflow:auto; }
+  .ga-toast { position:fixed; bottom:20px; right:20px; background:var(--bg2); border:1px solid var(--border); padding:12px 16px; border-radius:8px; z-index:400; display:none; max-width:360px; font-size:13px; }
+  .ga-toast.err { border-color:var(--red); color:var(--red); }
+  .ga-small { font-size:12px; color:var(--text2); }
+  .ga-danger { border-color:var(--red); }
+  .ga-scroll { overflow-x:auto; }
+  .ga-chk { display:flex; gap:6px; align-items:center; font-size:13px; }
+</style>
+
+<div class="ga-top">
+  <h1 style="font-size:20px">&#127760; Global Admin</h1>
+  <select id="botSel"></select>
+  <span class="ga-small" id="botInfo"></span>
+</div>
+
+<div class="ga-tabs" id="tabs">
+  <button class="ga-tab on" data-t="overview">Overview</button>
+  <button class="ga-tab" data-t="users">Users</button>
+  <button class="ga-tab" data-t="products">Products</button>
+  <button class="ga-tab" data-t="announce">Announcements</button>
+  <button class="ga-tab" data-t="private">Private listings</button>
+  <button class="ga-tab" data-t="maint">Scan &amp; Clean</button>
+</div>
+
+<div id="p-overview"></div>
+
+<div id="p-users" hidden>
+  <div class="card">
+    <div class="ga-row">
+      <input class="ga-in" id="uq" placeholder="Search ID / @username / name" style="min-width:240px">
+      <select class="ga-in" id="uf">
+        <option value="all">All users</option><option value="alive">Active (verified)</option>
+        <option value="dead">Blocked / deleted</option><option value="unchecked">Not scanned</option>
+        <option value="banned">Banned</option><option value="balance">With balance</option>
+      </select>
+      <select class="ga-in" id="up"><option>25</option><option selected>50</option><option>100</option><option>500</option></select>
+      <span class="ga-small" id="utotals"></span>
+    </div>
+    <div class="ga-scroll"><table class="ga-table"><thead><tr id="uhead"></tr></thead><tbody id="ubody"></tbody></table></div>
+    <div class="ga-row" style="margin-top:12px">
+      <button class="btn btn-primary btn-sm" id="uprev">&larr;</button>
+      <span class="ga-small" id="upage"></span>
+      <button class="btn btn-primary btn-sm" id="unext">&rarr;</button>
+    </div>
+  </div>
+</div>
+
+<div id="p-products" hidden>
+  <div class="card">
+    <div class="ga-row"><h2 style="margin:0">Products <span class="ga-small">🌐 global listing only · private ones are under "Private listings"</span></h2>
+      <button class="btn btn-green btn-sm" id="padd">+ Add product</button>
+      <button class="btn btn-primary btn-sm" id="gadd"></button></div>
+    <div id="pnone" class="ga-small" hidden>This bot has no product catalog.</div>
+    <div class="ga-scroll"><table class="ga-table"><thead id="phead"></thead><tbody id="pbody"></tbody></table></div>
+  </div>
+  <div class="card"><h2 id="gtitle"></h2><div id="glist"></div></div>
+  <div class="card" id="curcard" hidden>
+    <div class="ga-row"><h2 style="margin:0">Currency</h2><span id="curnow" class="ga-small"></span><button class="btn btn-primary btn-sm" id="curedit">Change currency</button></div>
+    <p class="ga-small" style="margin:6px 0 0">Prices, balances and top-ups are shown in this currency inside the bot and in this panel. Customers still pay in crypto — it is converted from this currency automatically. Existing prices and balances are <b>not</b> converted, only relabelled.</p>
+  </div>
+  <div class="card" id="notcard" hidden>
+    <div class="ga-row"><h2 style="margin:0">Admin notifications</h2></div>
+    <p class="ga-small" style="margin:6px 0 8px">Choose which messages each admin of this bot receives. Everything is on by default; the change applies immediately, no restart needed.</p>
+    <div id="notbody"></div>
+  </div>
+  <div class="card" id="sitecard" hidden>
+    <div class="ga-row"><h2 style="margin:0">Website</h2><span id="sitestat" class="ga-small"></span>
+      <button class="btn btn-primary btn-sm" id="siteset">Website settings</button></div>
+    <p class="ga-small" style="margin:6px 0 8px">The shop website shows this bot’s cities, categories, products and districts. Visitors can register, top up and buy; their accounts and reviews are managed here. Prices follow the bot’s currency.</p>
+    <h3 style="margin:12px 0 6px;font-size:14px">Website users <span id="siteucount" class="ga-small"></span></h3>
+    <div class="ga-scroll"><table class="ga-table"><thead><tr><th>Login</th><th>Balance</th><th>Orders</th><th>Registered</th><th></th></tr></thead><tbody id="siteusers"></tbody></table></div>
+    <div class="ga-row" style="margin-top:14px"><h3 style="margin:0;font-size:14px">Reviews</h3><span id="siterc" class="ga-small"></span><button class="btn btn-ghost btn-sm" id="siteradd">+ Add review</button></div>
+    <div class="ga-scroll"><table class="ga-table"><thead><tr><th>User</th><th>Where</th><th>Text</th><th>Status</th><th></th></tr></thead><tbody id="siterev"></tbody></table></div>
+  </div>
+  <div class="card" id="catcard" hidden>
+    <div class="ga-row"><h2 style="margin:0">Categories</h2><button class="btn btn-primary btn-sm" id="cadd">+ Add category</button></div>
+    <p class="ga-small" style="margin:6px 0">Optional layer between the city and the products. In the Constructor you can build a flow like City → Category → Listing → District, or keep the plain Products → District flow. Hidden from users while a category has no products.</p>
+    <div id="clist"></div>
+  </div>
+</div>
+
+<div id="p-announce" hidden>
+  <div class="card">
+    <h2>New announcement</h2>
+    <span class="ga-label">Send from</span>
+    <div id="abots" class="ga-row"></div>
+    <span class="ga-label">Message</span>
+    <textarea class="ga-ta" id="atext" placeholder="Announcement text..."></textarea>
+    <label class="ga-chk"><input type="checkbox" id="ahtml"> Format as HTML (&lt;b&gt;, &lt;i&gt;, &lt;a href&gt;)</label>
+    <span class="ga-label">Photo (optional)</span>
+    <input type="file" id="aphoto" accept="image/*" class="ga-in">
+    <span class="ga-label">Schedule (leave empty to send now) — your local time</span>
+    <div class="ga-row">
+      <input type="datetime-local" id="awhen" class="ga-in">
+      <select id="aevery" class="ga-in">
+        <option value="">Once</option><option value="30">Every 30 min</option><option value="60">Every 1 h</option>
+        <option value="120">Every 2 h</option><option value="360">Every 6 h</option>
+        <option value="720">Every 12 h</option><option value="1440">Every 24 h</option>
+      </select>
+    </div>
+    <p class="ga-small">Dead (blocked/deleted) and banned users are skipped automatically. Each user is sent the message once.</p>
+    <button class="btn btn-primary" id="asend">Send / Schedule</button>
+  </div>
+  <div class="card"><h2>Scheduled</h2><div id="sched"></div></div>
+</div>
+
+<div id="p-private" hidden>
+  <div class="card">
+    <h2>Private listings</h2>
+    <p class="ga-small" style="margin-bottom:10px">A user with a private listing no longer sees the global products — only the products you add here. It applies to every token of this bot. An empty listing shows them an empty catalog.</p>
+    <div id="pvwarn" class="ga-small" style="color:var(--red)" hidden></div>
+    <div class="ga-row">
+      <input class="ga-in" id="pvuid" placeholder="Telegram user ID" inputmode="numeric" style="min-width:220px">
+      <button class="btn btn-green btn-sm" id="pvopen">Create / open</button>
+    </div>
+    <div class="ga-scroll"><table class="ga-table"><thead><tr><th>User ID</th><th>Username</th><th>Products</th><th></th></tr></thead><tbody id="pvlist"></tbody></table></div>
+  </div>
+  <div class="card" id="pvdetail" hidden>
+    <div class="ga-row"><h2 id="pvtitle" style="margin:0"></h2>
+      <button class="btn btn-green btn-sm" id="pvadd">+ Add product</button>
+      <button class="btn btn-red btn-sm" id="pvdrop">Delete whole listing</button></div>
+    <div class="ga-scroll"><table class="ga-table"><thead id="pvhead"></thead><tbody id="pvbody"></tbody></table></div>
+  </div>
+</div>
+
+<div id="p-maint" hidden>
+  <div class="card">
+    <h2>Scan users</h2>
+    <p class="ga-small" style="margin-bottom:10px">Checks every user with Telegram (a silent “typing” action) to find people who blocked the bot or deleted their account. Takes about 1 second per 20 users.</p>
+    <label class="ga-chk"><input type="checkbox" id="mprof"> Also fetch usernames/names from Telegram (slower, fills in missing usernames)</label>
+    <div class="ga-row" style="margin-top:10px">
+      <button class="btn btn-primary" id="mscan">Start scan</button>
+      <button class="btn btn-ghost btn-sm" id="mforget">Forget scan results</button>
+    </div>
+    <div id="mstat" class="ga-small"></div>
+  </div>
+  <div class="card ga-danger">
+    <h2>Clean database</h2>
+    <p class="ga-small" style="margin-bottom:10px">Removes users the last scan marked as blocked/deleted from the bot's database, so announcements go out faster. A backup is saved first. Users with a balance are kept unless you tick the box below.</p>
+    <div class="ga-row">
+      <label class="ga-chk"><input type="checkbox" class="rs" value="blocked" checked> blocked the bot</label>
+      <label class="ga-chk"><input type="checkbox" class="rs" value="deleted" checked> deleted account</label>
+      <label class="ga-chk"><input type="checkbox" class="rs" value="not_found" checked> chat not found</label>
+    </div>
+    <label class="ga-chk"><input type="checkbox" id="mbal"> Also remove users who still have a balance (their balance is lost)</label>
+    <div class="ga-row" style="margin-top:10px">
+      <button class="btn btn-primary" id="mprev">Preview</button>
+      <button class="btn btn-red" id="mclean">Clean now</button>
+    </div>
+    <div id="mres" class="ga-small"></div>
+  </div>
+</div>
+
+<div class="card"><h2>Recent jobs</h2><div class="ga-scroll"><table class="ga-table"><tbody id="jobs"></tbody></table></div></div>
+
+<div class="ga-modal-bg" id="modal"><div class="ga-modal" id="modalBox"></div></div>
+<div class="ga-toast" id="toast"></div>
+
+<script>
+(() => {
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined && v !== false) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined) e.append(c.nodeType ? c : document.createTextNode(c));
+  return e;
+};
+const fmtCur = (x, c) => {
+  let t = (Math.round(Number(x || 0) * 100) / 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, ''); if (t === '-0' || t === '') t = '0';
+  const g = c.space ? ' ' : '';
+  return c.position === 'before' ? c.symbol + g + t : t + g + c.symbol;
+};
+const moneyFor = (b, n) => b && b.currency ? fmtCur(n, b.currency) : '$' + Number(n || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const money = n => moneyFor(curBot(), n);
+const curCode = () => ((curBot() || {}).currency || {}).code || 'USD';
+
+async function api(path, opts = {}) {
+  const o = {method: opts.body !== undefined ? 'POST' : 'GET', headers: {'X-GA': '1'}};
+  if (opts.form) { o.method = 'POST'; o.body = opts.form; }
+  else if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  const r = await fetch('/global/api' + path, o);
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) { toast(j.error || ('Error ' + r.status), true); throw new Error(j.error || r.status); }
+  return j;
+}
+let toastT;
+function toast(msg, err) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'ga-toast' + (err ? ' err' : ''); t.style.display = 'block';
+  clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 5000);
+}
+function modal(content) { const b = $('#modalBox'); b.replaceChildren(content); $('#modal').style.display = 'flex'; }
+function closeModal() { $('#modal').style.display = 'none'; }
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+let bots = [], cur = null, tab = 'overview';
+const supported = () => bots.filter(b => b.supported);
+const curBot = () => bots.find(b => b.name === cur);
+
+async function loadBots() {
+  bots = (await api('/bots')).bots;
+  const sel = $('#botSel'); sel.replaceChildren();
+  supported().forEach(b => sel.append(el('option', {value: b.name}, b.display)));
+  if (!cur || !supported().some(b => b.name === cur)) cur = supported()[0]?.name;
+  sel.value = cur || '';
+  const b = curBot();
+  $('#botInfo').textContent = b ? `${b.kind} · ${b.users} users · ${money(b.balance)} total balance` : '';
+  renderOverview();
+}
+$('#botSel').addEventListener('change', e => { cur = e.target.value; upage = 1; refreshTab(); loadBots(); });
+
+document.querySelectorAll('.ga-tab').forEach(b => b.addEventListener('click', () => {
+  tab = b.dataset.t;
+  document.querySelectorAll('.ga-tab').forEach(x => x.classList.toggle('on', x === b));
+  ['overview', 'users', 'products', 'announce', 'private', 'maint'].forEach(t => $('#p-' + t).hidden = t !== tab);
+  refreshTab();
+}));
+function refreshTab() {
+  if (tab === 'users') loadUsers(); else if (tab === 'products') loadProducts();
+  else if (tab === 'announce') renderAnnounce(); else if (tab === 'private') loadPrivate(); else if (tab === 'maint') renderMaint(); else renderOverview();
+}
+
+// ── overview
+function renderOverview() {
+  const box = $('#p-overview'); box.replaceChildren();
+  const grid = el('div', {class: 'ga-grid'});
+  for (const b of bots) {
+    const card = el('div', {class: 'ga-card', onclick: () => { if (b.supported) { cur = b.name; $('#botSel').value = cur; document.querySelector('[data-t=users]').click(); loadBots(); } }},
+      el('h3', {}, b.display, b.busy ? ' ⏳' : ''));
+    if (!b.supported) card.append(el('div', {class: 'ga-small'}, b.error || 'No recognised user database — not manageable here'));
+    else card.append(
+      el('div', {class: 'ga-kv'}, 'Users', el('b', {}, b.users)),
+      el('div', {class: 'ga-kv'}, 'Blocked / deleted', el('b', {style: b.dead ? 'color:var(--red)' : ''}, b.dead)),
+      el('div', {class: 'ga-kv'}, 'Scanned', el('b', {}, `${b.scanned} / ${b.users}`)),
+      el('div', {class: 'ga-kv'}, 'Total balance', el('b', {}, moneyFor(b, b.balance))),
+      el('div', {class: 'ga-kv'}, 'Type', el('b', {}, b.kind)));
+    grid.append(card);
+  }
+  box.append(grid);
+}
+
+// ── users
+let usort = 'joined', udir = 'desc', upage = 1, utotal = 0, ucaps = {};
+const cols = [['id', 'ID'], ['username', 'Username'], ['name', 'Name'], ['balance', 'Balance'], ['joined', 'Joined'], ['state', 'Status'], ['', '']];
+function renderHead() {
+  const h = $('#uhead'); h.replaceChildren();
+  cols.forEach(([k, t]) => h.append(el('th', {onclick: () => { if (!k || k === 'name') return; udir = (usort === k && udir === 'desc') ? 'asc' : 'desc'; usort = k; loadUsers(); }},
+    t + (usort === k ? (udir === 'desc' ? ' ▼' : ' ▲') : ''))));
+}
+async function loadUsers() {
+  if (!cur) return;
+  renderHead();
+  const q = new URLSearchParams({q: $('#uq').value, filter: $('#uf').value, sort: usort, dir: udir, page: upage, per: $('#up').value});
+  const j = await api(`/${cur}/users?${q}`);
+  utotal = j.total; ucaps = j.caps;
+  const t = j.totals;
+  $('#utotals').textContent = `${t.count} total · ${t.alive} active · ${t.dead} blocked/deleted · ${t.unchecked} not scanned · ${t.banned} banned · ${money(t.balance)}`;
+  const body = $('#ubody'); body.replaceChildren();
+  j.users.forEach(u => {
+    const un = u.username ? el('a', {href: 'https://t.me/' + u.username, target: '_blank', rel: 'noopener', style: 'color:var(--accent2)'}, '@' + u.username) : el('span', {class: 'ga-small'}, '—');
+    const badges = [el('span', {class: 'ga-badge b-' + u.state, title: u.reason ? u.reason : ''}, u.state === 'dead' ? 'dead: ' + u.reason : u.state)];
+    if (u.banned) badges.push(' ', el('span', {class: 'ga-badge b-banned'}, 'banned'));
+    const acts = el('td', {});
+    if (ucaps.ban) acts.append(el('button', {class: 'btn btn-ghost btn-sm', onclick: async () => { await api(`/${cur}/users/${u.id}/ban`, {body: {banned: !u.banned}}); loadUsers(); }}, u.banned ? 'Unban' : 'Ban'), ' ');
+    if (ucaps.balance) acts.append(el('button', {class: 'btn btn-ghost btn-sm', onclick: () => balanceModal(u)}, 'Balance'), ' ');
+    if (ucaps.purchases) acts.append(el('button', {class: 'btn btn-ghost btn-sm', onclick: () => purchasesModal(u)}, '🧾 Purchases'));
+    body.append(el('tr', {}, el('td', {}, String(u.id)), el('td', {}, un), el('td', {}, u.first_name || ''),
+      el('td', {}, ucaps.balance ? money(u.balance) : '—'), el('td', {class: 'ga-small'}, u.joined), el('td', {}, badges), acts));
+  });
+  if (!j.users.length) body.append(el('tr', {}, el('td', {colspan: 7, class: 'ga-small'}, 'No users match.')));
+  const per = +$('#up').value, pages = Math.max(Math.ceil(utotal / per), 1);
+  $('#upage').textContent = `Page ${upage} / ${pages} (${utotal} users)`;
+  $('#uprev').disabled = upage <= 1; $('#unext').disabled = upage >= pages;
+}
+let qT; $('#uq').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(() => { upage = 1; loadUsers(); }, 300); });
+$('#uf').addEventListener('change', () => { upage = 1; loadUsers(); });
+$('#up').addEventListener('change', () => { upage = 1; loadUsers(); });
+$('#uprev').addEventListener('click', () => { upage--; loadUsers(); });
+$('#unext').addEventListener('click', () => { upage++; loadUsers(); });
+
+function balanceModal(u) {
+  const amt = el('input', {class: 'ga-in', type: 'number', step: '0.01', min: '0', style: 'width:100%'});
+  const mode = el('select', {class: 'ga-in'}, el('option', {value: 'add'}, 'Add (use negative to subtract)'), el('option', {value: 'set'}, 'Set to exact amount'));
+  amt.removeAttribute('min');
+  modal(el('div', {}, el('h2', {}, `Balance — ${u.username ? '@' + u.username : u.id}`),
+    el('p', {class: 'ga-small'}, 'Current: ' + money(u.balance)), mode, el('span', {class: 'ga-label'}, curCode()), amt,
+    el('div', {class: 'ga-row', style: 'margin-top:14px'},
+      el('button', {class: 'btn btn-primary', onclick: async () => {
+        if (amt.value === '') return;
+        const r = await api(`/${cur}/users/${u.id}/balance`, {body: {mode: mode.value, amount: parseFloat(amt.value)}});
+        toast('New balance ' + money(r.balance)); closeModal(); loadUsers(); loadBots();
+      }}, 'Save'), el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
+}
+
+async function purchasesModal(u) {
+  const j = await api(`/${cur}/users/${u.id}/purchases`);
+  const list = el('div', {style: 'max-height:240px;overflow:auto;margin:8px 0'});
+  const redraw = (items) => {
+    list.replaceChildren();
+    if (!items.length) list.append(el('p', {class: 'ga-small'}, 'No purchases recorded yet.'));
+    items.forEach(p => list.append(el('div', {class: 'ga-row', style: 'justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)'},
+      el('span', {}, `#${p.id} · ${p.date} · ${p.product} · ${money(p.price_usd)}${p.note ? ' · ' + p.note : ''}`),
+      el('button', {class: 'btn btn-ghost btn-sm', title: 'Delete', onclick: async () => {
+        await api(`/${cur}/purchases/${p.id}/delete`, {body: {}}); purchasesModal(u);
+      }}, '✕'))));
+  };
+  redraw(j.purchases);
+  const prod = el('input', {class: 'ga-in', placeholder: 'Product name', style: 'width:100%'});
+  const price = el('input', {class: 'ga-in', type: 'number', step: '0.01', placeholder: 'Price (' + curCode() + ')', style: 'width:100%'});
+  const note = el('input', {class: 'ga-in', placeholder: 'Note (optional)', style: 'width:100%'});
+  modal(el('div', {}, el('h2', {}, `Purchases — ${u.username ? '@' + u.username : u.id}`), list,
+    el('span', {class: 'ga-label'}, 'Add a purchase'), prod, price, note,
+    el('div', {class: 'ga-row', style: 'margin-top:14px'},
+      el('button', {class: 'btn btn-primary', onclick: async () => {
+        if (!prod.value.trim()) { toast('Enter the product name', true); return; }
+        await api(`/${cur}/users/${u.id}/purchases`, {body: {product: prod.value, price: parseFloat(price.value || 0), note: note.value}});
+        toast('Purchase recorded'); purchasesModal(u);
+      }}, 'Add'), el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Close'))));
+}
+
+// ── products
+let pdata = null;
+async function loadProducts() {
+  const b = curBot(); if (!b) return;
+  $('#pnone').hidden = b.has_products;
+  $('#padd').hidden = $('#gadd').hidden = !b.has_products;
+  const body = $('#pbody'), head = $('#phead'); body.replaceChildren(); head.replaceChildren(); $('#glist').replaceChildren(); $('#gtitle').textContent = '';
+  if (!b.has_products) return;
+  pdata = await api(`/${cur}/products`);
+  const isJson = pdata.kind === 'json';
+  const gname = isJson ? 'District' : 'Category';
+  $('#gadd').textContent = '+ Add ' + gname.toLowerCase();
+  $('#gtitle').textContent = gname + 's';
+  loadNotifications(); loadSite();
+  const bcur = curBot();
+  $('#curcard').hidden = !(bcur && bcur.can_currency);
+  if (bcur && bcur.can_currency) $('#curnow').textContent = bcur.currency ? `${bcur.currency.symbol} (${bcur.currency.code}) — e.g. ${fmtCur(25.85, bcur.currency)}` : 'not set — amounts show as dollars';
+  const cats = (pdata.meta.categories || []), catName = id => (cats.find(c => c.id === id) || {}).name || '';
+  const hasCats = isJson && pdata.meta.supports_categories;
+  $('#catcard').hidden = !hasCats;
+  const cl = $('#clist'); cl.replaceChildren();
+  if (hasCats) {
+    cats.forEach(c => cl.append(el('div', {class: 'ga-row'}, el('span', {}, c.name), el('span', {class: 'ga-small'}, c.city ? `(${c.city})` : '(all cities)'),
+      el('button', {class: 'btn btn-red btn-sm', onclick: async () => { if (!confirm('Delete category ' + c.name + '? Its products become uncategorised.')) return; await api(`/${cur}/categories/delete`, {body: {id: c.id}}); loadProducts(); }}, '×'))));
+    if (!cats.length) cl.append(el('span', {class: 'ga-small'}, 'None yet.'));
+  }
+  head.append(el('tr', {}, ...(isJson ? ['Name', 'Price', 'Stock', 'City', ...(hasCats ? ['Category'] : []), 'Districts', ''] : ['Name', 'Price', 'Category', 'District', 'City', '']).map(t => el('th', {}, t))));
+  const dname = id => (pdata.meta.districts.find(d => d.id === id) || {}).name || id;
+  pdata.products.forEach(p => {
+    const acts = el('td', {}, el('button', {class: 'btn btn-ghost btn-sm', onclick: () => productModal(p)}, 'Edit'), ' ',
+      el('button', {class: 'btn btn-red btn-sm', onclick: async () => { if (!confirm('Delete "' + p.name + '"?')) return; await api(`/${cur}/products/delete`, {body: {id: p.id}}); loadProducts(); }}, 'Delete'));
+    body.append(el('tr', {}, isJson
+      ? [el('td', {}, p.name), el('td', {}, money(p.price_usd)), el('td', {}, p.quantity < 0 ? '∞' : p.quantity), el('td', {}, p.city), ...(hasCats ? [el('td', {}, catName(p.category))] : []), el('td', {class: 'ga-small'}, (p.districts || []).map(dname).join(', ')), acts]
+      : [el('td', {}, p.name), el('td', {}, money(p.price_usd)), el('td', {}, p.category_name || ''), el('td', {}, p.district), el('td', {}, p.city || ''), acts]));
+  });
+  if (!pdata.products.length) body.append(el('tr', {}, el('td', {colspan: 6, class: 'ga-small'}, 'No products yet.')));
+  const gl = $('#glist');
+  const groups = isJson ? pdata.meta.districts : pdata.meta.categories;
+  groups.forEach(g => gl.append(el('div', {class: 'ga-row'},
+    isJson && g.image ? (/\.(mp4|mov|webm|m4v)$/i.test(g.image) ? el('span', {title: g.image}, '🎬') : el('img', {src: `/bot/${cur}/api/image/${encodeURIComponent(g.image)}`, style: 'width:34px;height:34px;object-fit:cover;border-radius:6px', title: g.image})) : null,
+    el('span', {}, g.name), g.city ? el('span', {class: 'ga-small'}, `(${g.city})`) : null,
+    isJson ? el('button', {class: 'btn btn-ghost btn-sm', title: 'Picture shown in the bot when a user picks this district', onclick: () => districtPictureModal(g)}, g.image ? '🖼 Change picture' : '🖼 Add picture') : null,
+    el('button', {class: 'btn btn-red btn-sm', onclick: async () => { if (!confirm('Delete ' + g.name + '?')) return; await api(`/${cur}/groups/delete`, {body: {id: g.id}}); loadProducts(); }}, '×'))));
+  if (!groups.length) gl.append(el('span', {class: 'ga-small'}, 'None yet.'));
+}
+$('#gadd').addEventListener('click', () => {
+  const name = el('input', {class: 'ga-in', style: 'width:100%'}), city = el('input', {class: 'ga-in', style: 'width:100%', value: pdata.meta.cities[0] || ''});
+  modal(el('div', {}, el('h2', {}, $('#gadd').textContent), el('span', {class: 'ga-label'}, 'Name'), name, el('span', {class: 'ga-label'}, 'City'), city,
+    el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
+      await api(`/${cur}/groups`, {body: {name: name.value, city: city.value}}); closeModal(); loadProducts(); }}, 'Add'),
+      el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
+});
+async function districtPictureModal(g) {
+  const lib = (await (await fetch(`/bot/${cur}/api/images`)).json()).images || [];
+  const grid = el('div', {style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;max-height:46vh;overflow:auto;margin:10px 0'});
+  const pick = async name => { await api(`/${cur}/districts/image`, {body: {id: g.id, image: name}}); closeModal(); toast(name ? 'Picture saved' : 'Picture removed'); loadProducts(); };
+  const tile = im => {
+    const vid = im.kind === 'video';
+    return el('div', {style: `border:2px solid ${im.name === g.image ? 'var(--accent2)' : 'var(--border)'};border-radius:8px;overflow:hidden;cursor:pointer;background:var(--bg3)`, onclick: () => pick(im.name)},
+      vid ? el('div', {style: 'height:80px;display:flex;align-items:center;justify-content:center;font-size:26px'}, '🎬') : el('img', {src: `/bot/${cur}/api/image/${encodeURIComponent(im.name)}`, style: 'display:block;width:100%;height:80px;object-fit:cover', loading: 'lazy'}),
+      el('div', {class: 'ga-small', style: 'padding:3px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: im.name}, im.name));
+  };
+  lib.forEach(im => grid.append(tile(im)));
+  const file = el('input', {type: 'file', accept: 'image/*,video/mp4,video/quicktime,video/webm', class: 'ga-in', onchange: async () => {
+    const fd = new FormData(); fd.append('file', file.files[0]);
+    const r = await fetch(`/bot/${cur}/api/images`, {method: 'POST', body: fd}); const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(j.error || 'Upload failed', true); return; }
+    await pick(j.name);
+  }});
+  modal(el('div', {}, el('h2', {}, `Picture — ${g.name}`), el('p', {class: 'ga-small'}, 'Shown on any bot screen set to “use the district’s picture” (e.g. the payment screen) after the user picks this district.'),
+    el('span', {class: 'ga-label'}, 'Upload a new picture, GIF or video'), file, el('span', {class: 'ga-label', style: 'margin-top:10px'}, 'Or pick one from the library'), grid,
+    el('div', {class: 'ga-row'}, el('button', {class: 'btn btn-red btn-sm', onclick: () => pick('')}, 'Remove picture'), el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
+}
+let siteData = null;
+async function loadSite() {
+  const b = curBot(), card = $('#sitecard');
+  card.hidden = !(b && b.can_site); if (card.hidden) return;
+  try { siteData = await api(`/${cur}/site`); } catch (e) { card.hidden = true; return; }
+  renderSite();
+}
+function renderSite() {
+  const d = siteData, ub = $('#siteusers'), rb = $('#siterev'); ub.replaceChildren(); rb.replaceChildren();
+  $('#sitestat').textContent = d.site.enabled ? '● online' : '○ closed (visitors see “temporarily closed”)';
+  $('#siteucount').textContent = `(${d.users.length})`;
+  const act = async (path, body, msg) => { try { siteData = Object.assign(siteData, await api(`/${cur}/site/${path}`, {body})); renderSite(); toast(msg || 'Saved'); } catch (e) {} };
+  d.users.forEach(u => ub.append(el('tr', {}, el('td', {}, u.login + (u.banned ? ' 🚫' : '')), el('td', {}, money(u.balance)), el('td', {}, u.orders), el('td', {class: 'ga-small'}, u.created),
+    el('td', {class: 'ga-row', style: 'gap:6px;justify-content:flex-end'},
+      el('button', {class: 'btn btn-ghost btn-sm', onclick: () => { const v = prompt('New balance for ' + u.login, u.balance); if (v !== null && v.trim() !== '' && !isNaN(parseFloat(v))) act('user', {login: u.login, action: 'balance', value: parseFloat(v)}); }}, 'Balance'),
+      el('button', {class: 'btn btn-ghost btn-sm', onclick: () => { const v = prompt('New password for ' + u.login + ' (min 6 characters)'); if (v) act('user', {login: u.login, action: 'password', value: v}, 'Password changed'); }}, 'Password'),
+      el('button', {class: 'btn btn-ghost btn-sm', onclick: () => act('user', {login: u.login, action: 'ban', value: !u.banned})}, u.banned ? 'Unblock' : 'Block'),
+      el('button', {class: 'btn btn-red btn-sm', onclick: () => { if (confirm('Delete website user ' + u.login + '? Their orders stay in the history.')) act('user', {login: u.login, action: 'delete'}); }}, '×')))));
+  if (!d.users.length) ub.append(el('tr', {}, el('td', {colspan: 5, class: 'ga-small'}, 'No website users yet.')));
+  $('#siterc').textContent = `(${d.reviews.filter(r => r.approved).length} published, ${d.reviews.filter(r => !r.approved).length} waiting)`;
+  d.reviews.forEach(r => rb.append(el('tr', {}, el('td', {}, r.login), el('td', {class: 'ga-small'}, [r.city, r.district, r.product].filter(Boolean).join(' · ')), el('td', {style: 'max-width:340px;white-space:normal'}, r.text),
+    el('td', {}, r.approved ? 'published' : '⏳ waiting'),
+    el('td', {class: 'ga-row', style: 'gap:6px;justify-content:flex-end'},
+      el('button', {class: 'btn btn-ghost btn-sm', onclick: () => act('review', {id: r.id, action: r.approved ? 'hide' : 'approve'})}, r.approved ? 'Hide' : 'Publish'),
+      el('button', {class: 'btn btn-red btn-sm', onclick: () => { if (confirm('Delete this review?')) act('review', {id: r.id, action: 'delete'}); }}, '×')))));
+  if (!d.reviews.length) rb.append(el('tr', {}, el('td', {colspan: 5, class: 'ga-small'}, 'No reviews yet. Buyers can write one from their order page; you publish it here.')));
+}
+$('#siteradd').addEventListener('click', () => {
+  const f = {}, mk = (k, ph, ta) => { f[k] = el(ta ? 'textarea' : 'input', {class: ta ? 'ga-ta' : 'ga-in', placeholder: ph, style: 'width:100%'}); return [el('span', {class: 'ga-label'}, ph), f[k]]; };
+  modal(el('div', {}, el('h2', {}, 'Add review'), ...mk('login', 'Name shown'), ...mk('city', 'City'), ...mk('district', 'District'), ...mk('product', 'Product'), ...mk('text', 'Review text', true),
+    el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
+      const review = Object.fromEntries(Object.entries(f).map(([k, n]) => [k, n.value]));
+      try { siteData = Object.assign(siteData, await api(`/${cur}/site/review`, {body: {action: 'add', review}})); closeModal(); renderSite(); toast('Review added'); } catch (e) {}
+    }}, 'Add'), el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
+});
+$('#siteset').addEventListener('click', async () => {
+  const s = JSON.parse(JSON.stringify(siteData.site)), imgs = (await (await fetch(`/bot/${cur}/api/images`)).json()).images || [];
+  const inp = (v, ph) => el('input', {class: 'ga-in', style: 'width:100%', value: v || '', placeholder: ph || ''});
+  const pick = v => el('select', {class: 'ga-in', style: 'width:100%'}, el('option', {value: ''}, '— none —'), ...imgs.filter(i => i.kind !== 'video').map(i => el('option', {value: i.name, selected: i.name === v}, i.name)));
+  const brand = inp(s.brand), name = inp(s.name), copy = inp(s.copyright), coin = el('select', {class: 'ga-in', style: 'width:100%'}, ...siteData.coins.map(c => el('option', {value: c, selected: c === s.coin}, c)));
+  const open = el('input', {type: 'checkbox', checked: s.enabled}), defimg = pick(s.default_image);
+  const cimgs = {}; const cwrap = el('div', {}); siteData.cities.forEach(c => { cimgs[c] = pick((s.city_images || {})[c]); cwrap.append(el('div', {class: 'ga-small', style: 'margin-top:6px'}, c), cimgs[c]); });
+  const ta = el('textarea', {class: 'ga-ta', style: 'min-height:150px;width:100%', placeholder: 'Title\nlink 1\nlink 2\n\nNext title\nlink'});
+  ta.value = s.links.map(g => [g.title, ...g.items].join('\n')).join('\n\n');
+  modal(el('div', {}, el('h2', {}, 'Website settings'),
+    el('label', {class: 'ga-chk'}, open, ' Website is open'),
+    el('span', {class: 'ga-label'}, 'Header title'), brand, el('span', {class: 'ga-label'}, 'Footer name'), name, el('span', {class: 'ga-label'}, 'Footer note'), copy,
+    el('span', {class: 'ga-label'}, 'Crypto shown next to prices'), coin,
+    el('span', {class: 'ga-label'}, 'Default product picture (when a product has none)'), defimg,
+    el('span', {class: 'ga-label'}, 'City pictures'), cwrap,
+    el('span', {class: 'ga-label'}, 'Links (footer + “Полезные ссылки”): a title line, then its links; blank line between groups'), ta,
+    el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
+      const links = ta.value.split(/\n\s*\n/).map(b => b.split('\n').map(x => x.trim()).filter(Boolean)).filter(b => b.length > 1).map((b, i) => ({title: b[0], icon: ['↗', '✦', 'i'][i % 3], items: b.slice(1)}));
+      const body = {enabled: open.checked, brand: brand.value, name: name.value, copyright: copy.value, coin: coin.value, default_image: defimg.value,
+        city_images: Object.fromEntries(Object.entries(cimgs).map(([c, n]) => [c, n.value]).filter(([, v]) => v)), links};
+      try { siteData = await api(`/${cur}/site`, {body}); closeModal(); renderSite(); toast('Website settings saved'); } catch (e) {}
+    }}, 'Save'), el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
+});
+async function loadNotifications() {
+  const b = curBot(), card = $('#notcard'), body = $('#notbody');
+  card.hidden = !(b && b.can_notify); if (card.hidden) return;
+  let j; try { j = await api(`/${cur}/notifications`); } catch (e) { card.hidden = true; return; }
+  body.replaceChildren();
+  if (!j.admins.length) { body.append(el('div', {class: 'ga-small'}, 'This bot has no admin user ids (ADMIN_IDS in its .env).')); return; }
+  j.admins.forEach(a => {
+    const off = new Set(a.off), box = el('div', {style: 'margin:8px 0 12px'}, el('b', {}, 'Admin ' + a.id));
+    j.events.forEach(ev => box.append(el('label', {class: 'ga-chk', style: 'display:block;margin:4px 0'},
+      el('input', {type: 'checkbox', checked: !off.has(ev.id), onchange: async e => {
+        if (e.target.checked) off.delete(ev.id); else off.add(ev.id);
+        try { await api(`/${cur}/notifications`, {body: {admin: a.id, off: [...off]}}); toast('Saved'); }
+        catch (err) { e.target.checked = !e.target.checked; if (e.target.checked) off.delete(ev.id); else off.add(ev.id); }
+      }}), ' ' + ev.label)));
+    body.append(box);
+  });
+}
+const CUR_PRESETS = [['USD', '$'], ['EUR', '€'], ['GEL', 'ლ'], ['RUB', '₽'], ['UAH', '₴'], ['TRY', '₺'], ['GBP', '£'], ['PLN', 'zł'], ['KZT', '₸'], ['AED', 'AED'], ['CAD', 'C$'], ['AUD', 'A$']];
+$('#curedit').addEventListener('click', () => {
+  const b = curBot(), c = Object.assign({code: 'USD', symbol: '$', position: 'after', space: false, rate: 'auto'}, b.currency || {});
+  const box = el('div', {}), prev = el('div', {style: 'font-size:16px;margin:8px 0'}), res = el('div', {class: 'ga-small'});
+  const code = el('input', {class: 'ga-in', style: 'width:90px', maxlength: 3, value: c.code}), sym = el('input', {class: 'ga-in', style: 'width:90px', maxlength: 6, value: c.symbol});
+  const pos = el('select', {class: 'ga-in'}, el('option', {value: 'after'}, 'after (25ლ)'), el('option', {value: 'before'}, 'before (ლ25)'));
+  const sp = el('input', {type: 'checkbox'}); sp.checked = !!c.space; pos.value = c.position;
+  const mode = el('select', {class: 'ga-in'}, el('option', {value: 'auto'}, 'Live rate (recommended)'), el('option', {value: 'fixed'}, 'Fixed rate'));
+  const fixed = el('input', {class: 'ga-in', type: 'number', step: '0.0001', min: '0', style: 'width:130px', value: c.rate === 'auto' ? '' : c.rate});
+  mode.value = c.rate === 'auto' ? 'auto' : 'fixed';
+  const curObj = () => ({code: code.value.toUpperCase(), symbol: sym.value, position: pos.value, space: sp.checked, rate: mode.value === 'auto' ? 'auto' : parseFloat(fixed.value)});
+  const draw = () => { fixed.style.display = mode.value === 'fixed' ? '' : 'none'; const x = curObj(); prev.textContent = `Balance ${fmtCur(25, x)}  ·  Price ${fmtCur(25.85, x)}`; };
+  [code, sym, pos, sp, mode, fixed].forEach(n => n.addEventListener('input', draw)); [pos, mode].forEach(n => n.addEventListener('change', draw));
+  const chips = el('div', {class: 'ga-row'}, ...CUR_PRESETS.map(([cd, sy]) => el('button', {class: 'btn btn-ghost btn-sm', onclick: () => { code.value = cd; sym.value = sy; draw(); }}, `${sy} ${cd}`)));
+  modal(el('div', {}, el('h2', {}, 'Currency'), el('span', {class: 'ga-label'}, 'Quick pick'), chips,
+    el('div', {class: 'ga-row', style: 'margin-top:10px'}, el('div', {}, el('span', {class: 'ga-label'}, 'Code'), code), el('div', {}, el('span', {class: 'ga-label'}, 'Symbol'), sym), el('div', {}, el('span', {class: 'ga-label'}, 'Symbol goes'), pos)),
+    el('label', {class: 'ga-chk'}, sp, 'Space between number and symbol'), prev,
+    el('span', {class: 'ga-label'}, 'Exchange rate to USD (only used to work out the crypto amount)'),
+    el('div', {class: 'ga-row'}, mode, el('span', {class: 'ga-small'}, '1 unit ='), fixed, el('button', {class: 'btn btn-ghost btn-sm', onclick: async () => {
+      try { const r = await api('/currency-rate?code=' + encodeURIComponent(code.value)); res.textContent = '✓ ' + r.msg; } catch (e) { res.textContent = ''; } }}, 'Check live rate')), res,
+    el('p', {class: 'ga-small', style: 'margin-top:10px;color:var(--yellow)'}, '⚠ Existing prices and balances are not converted — 25 stays 25, just in the new currency.'),
+    el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
+      await api(`/${cur}/currency`, {body: {currency: curObj()}}); closeModal(); toast('Currency saved'); await loadBots(); loadProducts(); }}, 'Save'),
+      el('button', {class: 'btn btn-red', onclick: async () => { if (!confirm('Remove the currency? Amounts show as plain dollars again.')) return; await api(`/${cur}/currency`, {body: {currency: null}}); closeModal(); await loadBots(); loadProducts(); }}, 'Remove'),
+      el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
+  draw();
+});
+$('#cadd').addEventListener('click', () => {
+  const name = el('input', {class: 'ga-in', style: 'width:100%'}), city = el('input', {class: 'ga-in', style: 'width:100%', placeholder: 'leave empty = shown in every city'});
+  modal(el('div', {}, el('h2', {}, 'Add category'), el('span', {class: 'ga-label'}, 'Name'), name, el('span', {class: 'ga-label'}, 'City (e.g. ' + (pdata.meta.cities[0] || 'tbilisi') + ')'), city,
+    el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
+      await api(`/${cur}/categories`, {body: {name: name.value, city: city.value}}); closeModal(); loadProducts(); }}, 'Add'),
+      el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
+});
+$('#padd').addEventListener('click', () => productModal(null));
+function productModal(p, owner = null) {
+  const isJson = pdata.kind === 'json', f = {}, box = el('div', {});
+  const field = (key, label, node) => { f[key] = node; box.append(el('span', {class: 'ga-label'}, label), node); };
+  const inp = (v, type = 'text') => el('input', {class: 'ga-in', style: 'width:100%', type, step: type === 'number' ? '0.01' : null, value: v ?? ''});
+  box.append(el('h2', {}, p ? 'Edit product' : 'Add product'));
+  field('name', 'Name', inp(p?.name));
+  field('price_usd', 'Price (' + curCode() + ')', inp(p?.price_usd, 'number'));
+  const desc = el('textarea', {class: 'ga-ta', style: 'min-height:70px'}); desc.value = p?.description || '';
+  field('description', 'Description', desc);
+  if (isJson) {
+    field('quantity', 'Stock (-1 = unlimited)', inp(p?.quantity ?? -1, 'number'));
+    field('city', 'City', inp(p?.city || pdata.meta.cities[0] || 'tbilisi'));
+    const wrap = el('div', {}); f.districts = wrap;
+    pdata.meta.districts.forEach(d => wrap.append(el('label', {class: 'ga-chk'}, el('input', {type: 'checkbox', value: d.id, checked: (p?.districts || []).includes(d.id)}), d.name)));
+    box.append(el('span', {class: 'ga-label'}, 'Districts'), wrap);
+    {
+      const cur_v = p?.variants || ['land', 'building'], vw = el('div', {}); f.variants = vw;
+      [['land', 'მიწა უბანი / BURRIED IN DISTRICT'], ['building', 'კორპუსი / BUILDING']].forEach(([k, n]) =>
+        vw.append(el('label', {class: 'ga-chk'}, el('input', {type: 'checkbox', value: k, checked: cur_v.includes(k)}), n)));
+      box.append(el('span', {class: 'ga-label'}, 'Variants the buyer can choose'), vw,
+        el('div', {class: 'ga-small'}, 'The Variants screen only shows the buttons ticked here for the picked listing.'));
+    }
+    {
+      field('weight', 'Weight tag on the website (e.g. 2.0)', inp(p?.weight || ''));
+      const imgSel = el('select', {class: 'ga-in', style: 'width:100%', onchange: () => {}}, el('option', {value: ''}, '— default —'));
+      fetch(`/bot/${cur}/api/images`).then(r => r.json()).then(j => (j.images || []).filter(i => i.kind !== 'video').forEach(im => imgSel.append(el('option', {value: im.name, selected: im.name === p?.image}, im.name))));
+      field('image', 'Website picture', imgSel);
+    }
+    {
+      const dl = el('textarea', {class: 'ga-ta', style: 'min-height:70px', placeholder: 'e.g. coordinates, instructions, a code…'}); dl.value = p?.delivery_text || '';
+      field('delivery_text', 'Delivery text (sent to the buyer after buying with balance)', dl);
+      let dimg = p?.delivery_image || '';
+      const prev = el('div', {style: 'margin:6px 0;min-height:10px'}), nameEl = el('span', {class: 'ga-small'});
+      const holder = {get value() { return dimg; }}; f.delivery_image = holder;
+      const show = () => { prev.replaceChildren(); nameEl.textContent = dimg || 'none';
+        if (dimg) prev.append(/\.(mp4|mov|webm|m4v)$/i.test(dimg) ? el('span', {}, '🎬 ' + dimg) : el('img', {src: `/bot/${cur}/api/image/${encodeURIComponent(dimg)}`, style: 'max-width:180px;max-height:140px;border-radius:6px;display:block'})); };
+      const file = el('input', {type: 'file', accept: 'image/*,video/mp4,video/quicktime,video/webm', class: 'ga-in', onchange: async () => {
+        const fd = new FormData(); fd.append('file', file.files[0]);
+        const r = await fetch(`/bot/${cur}/api/images`, {method: 'POST', body: fd}); const j = await r.json().catch(() => ({}));
+        if (!r.ok) { toast(j.error || 'Upload failed', true); return; } dimg = j.name; show(); toast('Picture uploaded'); }});
+      const libSel = el('select', {class: 'ga-in', style: 'width:100%;margin-top:6px', onchange: () => { dimg = libSel.value; show(); }}, el('option', {value: ''}, '— pick from the bot’s library —'));
+      fetch(`/bot/${cur}/api/images`).then(r => r.json()).then(j => (j.images || []).forEach(im => libSel.append(el('option', {value: im.name, selected: im.name === dimg}, im.name))));
+      box.append(el('span', {class: 'ga-label'}, 'Delivery picture, GIF or video (sent with the text)'), prev, el('div', {class: 'ga-small'}, 'Current: ', nameEl), file, libSel,
+        el('button', {class: 'btn btn-ghost btn-sm', style: 'margin-top:6px', onclick: () => { dimg = ''; file.value = ''; libSel.value = ''; show(); }}, 'Remove picture'));
+      show();
+    }
+    if (pdata.meta.supports_categories) {
+      const cat = el('select', {class: 'ga-in', style: 'width:100%'}, el('option', {value: ''}, '— none —'),
+        ...(pdata.meta.categories || []).map(c => el('option', {value: c.id, selected: p?.category === c.id}, c.name + (c.city ? ` (${c.city})` : ''))));
+      field('category', 'Category', cat);
+    }
+  } else {
+    const dl = el('textarea', {class: 'ga-ta', style: 'min-height:60px'}); dl.value = p?.delivery_text || '';
+    field('delivery_text', 'Delivery text (sent to the buyer after purchase)', dl);
+    if (pdata.meta.has_delivery_image) {
+      let imgName = p?.delivery_image || '';
+      const prev = el('img', {style: 'max-width:180px;max-height:140px;border-radius:6px;display:block;margin:6px 0'});
+      const show = () => { if (imgName) { prev.src = `/global/api/${cur}/products/image/${encodeURIComponent(imgName)}`; prev.style.display = 'block'; } else prev.style.display = 'none'; };
+      const file = el('input', {type: 'file', accept: 'image/*', class: 'ga-in', onchange: async () => {
+        const fd = new FormData(); fd.set('photo', file.files[0]);
+        const r = await api(`/${cur}/products/image`, {form: fd}); imgName = r.name; show(); toast('Picture uploaded');
+      }});
+      const holder = {get value() { return imgName; }};
+      f.delivery_image = holder;
+      box.append(el('span', {class: 'ga-label'}, 'Delivery picture (sent with the text)'), prev, file,
+        el('button', {class: 'btn btn-ghost btn-sm', style: 'margin-top:6px', onclick: () => { imgName = ''; file.value = ''; show(); }}, 'Remove picture'));
+      show();
+    }
+    const cat = el('select', {class: 'ga-in', style: 'width:100%'}, el('option', {value: ''}, '— none —'),
+      ...pdata.meta.categories.map(c => el('option', {value: c.id, selected: p?.category === c.id}, c.name + (c.city ? ` (${c.city})` : ''))));
+    field('category', 'Category', cat);
+    if (owner !== null) field('districts', 'Districts (comma-separated)', inp((p?.districts || (p?.district ? [p.district] : [])).join(', ')));
+    else field('district', 'District', inp(p?.district));
+    const copts = pdata.meta.city_options?.length ? pdata.meta.city_options : pdata.meta.cities;
+    if (copts.length || p?.city !== undefined) {
+      const cur_ = p?.city ?? copts[0] ?? '';
+      field('city', 'City', el('select', {class: 'ga-in', style: 'width:100%'},
+        ...[...new Set([...copts, cur_].filter(Boolean))].map(c => el('option', {value: c, selected: c === cur_}, c))));
+    }
+  }
+  box.append(el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
+    const body = {id: p?.id};
+    for (const [k, n] of Object.entries(f)) body[k] = k === 'variants'
+      ? [...n.querySelectorAll('input:checked')].map(i => i.value)
+      : k === 'districts'
+      ? (n.tagName === 'INPUT' ? n.value.split(',').map(x => x.trim()).filter(Boolean) : [...n.querySelectorAll('input:checked')].map(i => i.value))
+      : n.value;
+    body.price_usd = parseFloat(body.price_usd); if (isJson) body.quantity = parseInt(body.quantity);
+    if (owner !== null) body.owner = owner;
+    if (body.variants && !body.variants.length) { toast('Pick at least one variant', true); return; }
+    await api(`/${cur}/products`, {body}); closeModal(); toast('Saved');
+    if (owner !== null) openPrivate(owner); else loadProducts();
+  }}, 'Save'), el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel')));
+  modal(box);
+}
+
+// ── private listings
+let pvCur = null;
+async function loadPrivate() {
+  const b = curBot(); if (!b) return;
+  $('#pvdetail').hidden = true; pvCur = null;
+  const warn = $('#pvwarn'), body = $('#pvlist'); body.replaceChildren();
+  warn.hidden = true;
+  let j;
+  try { j = await api(`/${cur}/private`); }
+  catch (e) { warn.textContent = 'Not available for this bot: ' + e.message; warn.hidden = false; return; }
+  j.listings.forEach(l => body.append(el('tr', {},
+    el('td', {}, String(l.user_id)),
+    el('td', {}, l.username ? '@' + l.username : (l.known ? '—' : 'not a known user yet')),
+    el('td', {}, String(l.products)),
+    el('td', {}, el('button', {class: 'btn btn-primary btn-sm', onclick: () => openPrivate(l.user_id)}, 'Open'), ' ',
+      el('button', {class: 'btn btn-red btn-sm', onclick: () => dropPrivate(l.user_id)}, 'Delete')))));
+  if (!j.listings.length) body.append(el('tr', {}, el('td', {colspan: 4, class: 'ga-small'}, 'No private listings yet.')));
+}
+async function dropPrivate(uid) {
+  if (!confirm(`Delete the private listing of ${uid} and all its products? They will see the global catalog again.`)) return;
+  await api(`/${cur}/private/delete`, {body: {user_id: uid}}); loadPrivate();
+}
+async function openPrivate(uid) {
+  pvCur = uid;
+  const j = await api(`/${cur}/private/${uid}/products`);
+  pdata = j;
+  const isJson = j.kind === 'json';
+  $('#pvdetail').hidden = false;
+  $('#pvtitle').textContent = `Private listing — user ${uid}`;
+  const head = $('#pvhead'), body = $('#pvbody'); head.replaceChildren(); body.replaceChildren();
+  head.append(el('tr', {}, ...['Name', 'Price', isJson ? 'Stock' : 'Category', isJson ? 'Districts' : 'City · districts', ''].map(t => el('th', {}, t))));
+  const dname = id => (j.meta.districts?.find(d => d.id === id) || {}).name || id;
+  j.products.forEach(p => body.append(el('tr', {}, el('td', {}, p.name), el('td', {}, money(p.price_usd)),
+    el('td', {}, isJson ? (p.quantity < 0 ? '∞' : p.quantity) : (p.category_name || '')),
+    el('td', {class: 'ga-small'}, isJson ? (p.districts || []).map(dname).join(', ') : `${p.city || ''} · ${(p.districts || []).join(', ')}`),
+    el('td', {}, el('button', {class: 'btn btn-ghost btn-sm', onclick: () => productModal(p, uid)}, 'Edit'), ' ',
+      el('button', {class: 'btn btn-red btn-sm', onclick: async () => { if (!confirm('Delete "' + p.name + '"?')) return;
+        await api(`/${cur}/products/delete`, {body: {id: p.id}}); openPrivate(uid); }}, 'Delete')))));
+  if (!j.products.length) body.append(el('tr', {}, el('td', {colspan: 5, class: 'ga-small'}, 'Empty — this user sees an empty catalog.')));
+  $('#pvdetail').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+$('#pvopen').addEventListener('click', async () => {
+  const v = $('#pvuid').value.trim();
+  if (!/^\d+$/.test(v)) return toast('Enter a numeric Telegram user ID', true);
+  await api(`/${cur}/private`, {body: {user_id: parseInt(v)}}); $('#pvuid').value = '';
+  await loadPrivate(); openPrivate(parseInt(v));
+});
+$('#pvadd').addEventListener('click', () => { if (pvCur !== null) productModal(null, pvCur); });
+$('#pvdrop').addEventListener('click', () => { if (pvCur !== null) dropPrivate(pvCur); });
+
+// ── announcements
+function renderAnnounce() {
+  const w = $('#abots'); const prev = new Set([...w.querySelectorAll('input:checked')].map(i => i.value));
+  w.replaceChildren();
+  supported().forEach(b => w.append(el('label', {class: 'ga-chk'}, el('input', {type: 'checkbox', value: b.name, checked: prev.size ? prev.has(b.name) : b.name === cur}), `${b.display} (${b.users})`)));
+  loadSchedules();
+}
+$('#asend').addEventListener('click', async () => {
+  const bots_ = [...document.querySelectorAll('#abots input:checked')].map(i => i.value);
+  const text = $('#atext').value.trim(), photo = $('#aphoto').files[0], when = $('#awhen').value;
+  if (!bots_.length) return toast('Pick at least one bot', true);
+  if (!text && !photo) return toast('Write a message or attach a photo', true);
+  const fd = new FormData();
+  fd.set('bots', bots_.join(',')); fd.set('text', text); fd.set('html', $('#ahtml').checked ? '1' : '0');
+  if (photo) fd.set('photo', photo);
+  if (when) {
+    const d = new Date(when); if (isNaN(d) || d <= new Date()) return toast('Pick a time in the future', true);
+    fd.set('run_at', d.toISOString().slice(0, 19).replace('T', ' ')); fd.set('every_min', $('#aevery').value);
+  } else if (!confirm(`Send now to all active users of ${bots_.length} bot(s)?`)) return;
+  const j = await api('/announce', {form: fd});
+  toast(when ? 'Scheduled' : `Sending (${j.jobs.length} job${j.jobs.length > 1 ? 's' : ''})`);
+  $('#atext').value = ''; $('#aphoto').value = ''; loadSchedules(); pollJobs();
+});
+const utcToLocal = s => new Date(s.replace(' ', 'T') + 'Z').toLocaleString();
+async function loadSchedules() {
+  const j = await api('/schedules'); const box = $('#sched'); box.replaceChildren();
+  const row = (label, text, when, rec, del) => box.append(el('div', {class: 'ga-row'},
+    el('b', {}, label), el('span', {}, text.length > 70 ? text.slice(0, 70) + '…' : text), el('span', {class: 'ga-small'}, when + (rec ? ' · ' + rec : '')),
+    el('button', {class: 'btn btn-red btn-sm', onclick: async () => { await api('/schedules/delete', {body: del}); loadSchedules(); }}, '×')));
+  j.schedules.forEach(s => row(s.display, s.text || '📷', utcToLocal(s.run_at), s.every_min ? `every ${s.every_min} min` : 'once', {id: s.id}));
+  j.native.forEach(s => row(s.display + ' (bot-native)', s.text || '📷', s.run_at + ' (bot time)', s.recurring ? 'every ' + s.recurring : 'once', {id: s.id, bot: s.bot, native: true}));
+  if (!box.children.length) box.append(el('span', {class: 'ga-small'}, 'Nothing scheduled.'));
+}
+
+// ── scan & clean
+async function renderMaint() {
+  const b = curBot(); if (!b) return;
+  $('#mstat').textContent = `${b.display}: ${b.scanned} of ${b.users} users scanned, ${b.dead} blocked/deleted.`;
+}
+$('#mscan').addEventListener('click', async () => {
+  await api(`/${cur}/scan`, {body: {profiles: $('#mprof').checked}}); toast('Scan started'); pollJobs();
+});
+$('#mforget').addEventListener('click', async () => {
+  if (!confirm('Forget all scan results for this bot?')) return;
+  await api(`/${cur}/forget`, {body: {}}); loadBots().then(renderMaint);
+});
+const reasons = () => [...document.querySelectorAll('.rs:checked')].map(i => i.value);
+$('#mprev').addEventListener('click', async () => {
+  const j = await api(`/${cur}/clean`, {body: {dry_run: true, reasons: reasons(), include_balance: $('#mbal').checked}});
+  $('#mres').textContent = `Would remove ${j.would_remove} users. ${j.kept_with_balance} dead users with a balance would be kept.`;
+});
+$('#mclean').addEventListener('click', async () => {
+  const j0 = await api(`/${cur}/clean`, {body: {dry_run: true, reasons: reasons(), include_balance: $('#mbal').checked}});
+  if (!j0.would_remove) { $('#mres').textContent = 'Nothing to remove. Run a scan first.'; return; }
+  if (!confirm(`Remove ${j0.would_remove} users from ${curBot().display}? A backup is saved first.`)) return;
+  const j = await api(`/${cur}/clean`, {body: {reasons: reasons(), include_balance: $('#mbal').checked}});
+  $('#mres').textContent = `Removed ${j.removed} users. ${j.kept_with_balance} kept (balance). Backup: ${j.backup || '—'}`;
+  loadBots();
+});
+
+// ── jobs
+let pollT = null;
+async function pollJobs() {
+  clearTimeout(pollT);
+  const j = (await api('/jobs')).jobs; const body = $('#jobs'); body.replaceChildren();
+  const names = Object.fromEntries(bots.map(b => [b.name, b.display]));
+  let running = false;
+  j.forEach(x => {
+    const act = x.status === 'running' || x.status === 'cancelling'; running = running || act;
+    const pct = x.total ? Math.round(100 * x.done / x.total) : 100;
+    body.append(el('tr', {},
+      el('td', {}, '#' + x.id), el('td', {}, names[x.bot] || x.bot), el('td', {}, x.kind),
+      el('td', {style: 'min-width:160px'}, el('div', {class: 'ga-bar'}, el('div', {style: `width:${pct}%`})), el('span', {class: 'ga-small'}, `${x.done}/${x.total} · ok ${x.ok} · dead ${x.dead} · failed ${x.failed}`)),
+      el('td', {}, x.status), el('td', {class: 'ga-small'}, x.note || ''),
+      el('td', {}, act ? el('button', {class: 'btn btn-ghost btn-sm', onclick: async () => { await api(`/jobs/${x.id}/cancel`, {body: {}}); pollJobs(); }}, 'Cancel') : '')));
+  });
+  if (!j.length) body.append(el('tr', {}, el('td', {class: 'ga-small'}, 'No jobs yet.')));
+  if (running) pollT = setTimeout(pollJobs, 2000); else if (pollJobs.was) { pollJobs.was = false; loadBots().then(() => { if (tab === 'users') loadUsers(); if (tab === 'maint') renderMaint(); }); }
+  pollJobs.was = pollJobs.was || running;
+}
+
+loadBots().then(pollJobs);
+})();
+</script>
+{% endblock %}

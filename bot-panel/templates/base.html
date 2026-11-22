@@ -401,6 +401,9 @@
         <button class="menu-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">&#9776;</button>
         <div class="nav-links">
             <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="/global" class="{% if request.path == '/global' %}active{% endif %}">Global Admin</a>
+            <a href="/sitefiles" class="{% if request.path.startswith('/sitefiles') %}active{% endif %}">🗂 Site Files</a>
+            <a href="/constructor" class="{% if request.path.startswith('/constructor') or '/constructor' in request.path %}active{% endif %}">🧩 Constructor</a>
             <a href="{{ url_for('add_bot') }}" class="{% if request.endpoint == 'add_bot' %}active{% endif %}">+ Add Bot</a>
             <a href="{{ url_for('attach_bot') }}" class="{% if request.endpoint == 'attach_bot' %}active{% endif %}">Attach Existing</a>
             <a href="{{ url_for('logout') }}" class="btn-ghost btn-sm">Logout</a>

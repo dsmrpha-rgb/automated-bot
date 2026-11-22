@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}New bot — Constructor{% endblock %}
+{% block content %}
+<style>
+.wz{max-width:760px;margin:0 auto}
+.steps{display:flex;gap:8px;margin:6px 0 22px}.steps div{flex:1;text-align:center;font-size:12px;padding:8px;border-radius:9px;background:var(--bg3);color:var(--text2)}
+.steps div.on{background:var(--accent);color:#fff;font-weight:600}.steps div.done{color:var(--green)}
+.wz .card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px}
+.wz label.f{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin:16px 0 6px}
+.wz input[type=text],.wz input:not([type]){width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px}
+.wz .hint{font-size:12px;color:var(--text2);margin-top:6px;line-height:1.45}
+.tpl{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tpl .opt{border:2px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;background:var(--bg)}
+.tpl .opt.on{border-color:var(--accent2);background:rgba(108,92,231,.12)}.tpl .opt b{display:block;margin:6px 0 4px}.tpl .opt span{font-size:12px;color:var(--text2)}
+.nav{display:flex;justify-content:space-between;margin-top:22px}
+.tok{display:flex;gap:8px;align-items:center;margin-bottom:8px}.tok .tag{font-size:11px;padding:3px 9px;border-radius:10px;background:var(--bg3);color:var(--text2);white-space:nowrap}
+.tag.g{background:rgba(0,184,148,.15);color:var(--green)}.tag.r{background:rgba(225,112,85,.15);color:var(--red)}
+.prog div{padding:7px 0;color:var(--text2)}.prog div:last-child{color:var(--text)}
+.chk{display:flex;gap:8px;align-items:center;margin:8px 0}
+</style>
+<div class="wz">
+  <div class="page-header"><h1>＋ Create a new bot</h1><a href="/constructor" class="btn btn-ghost">&larr; Back</a></div>
+  <div class="steps" id="steps"></div>
+  <div class="card" id="body"></div>
+</div>
+<script>
+const S = {step: 0, template: 'shop', name: '', display: '', langs: ['en'], tokens: [''], admins: [''], checks: {}, job: null};
+const $ = s => document.querySelector(s);
+const STEPS = ['Type', 'Name', 'Telegram', 'Create'];
+function h(t, a, ...k) { const e = document.createElement(t); for (const [n, v] of Object.entries(a || {})) { if (v == null || v === false) continue; if (n === 'class') e.className = v; else if (n.startsWith('on')) e.addEventListener(n.slice(2), v); else if (n === 'value') e.value = v; else if (n === 'checked') e.checked = !!v; else e.setAttribute(n, v); } k.flat(9).forEach(x => x != null && x !== false && e.append(x.nodeType ? x : document.createTextNode(x))); return e; }
+async function post(u, b) { const r = await fetch(u, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b)}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error ' + r.status); return j; }
+function draw() {
+  $('#steps').replaceChildren(...STEPS.map((t, i) => h('div', {class: i === S.step ? 'on' : i < S.step ? 'done' : ''}, (i < S.step ? '✓ ' : (i + 1) + '. ') + t)));
+  const b = $('#body'); b.replaceChildren();
+  if (S.step === 0) {
+    b.append(h('h2', {}, 'What are you building?'), h('p', {class: 'hint'}, 'You can change everything later in the builder — this only decides the starting point.'), h('div', {class: 'tpl', style: 'margin-top:14px'},
+      [['shop', '🛍', 'Shop bot', 'Products, balance top-ups with crypto, orders, language picker. Ready to sell.'], ['shop_categories', '🗂', 'Shop with categories', 'City → category → listing → district → variant → payment, plus balance top-ups. You can add the simpler flow later too.'], ['blank', '📄', 'Blank bot', 'A single welcome screen. Build anything from scratch — menus, info pages, forms.']].map(([k, ic, n, d]) =>
+        h('div', {class: 'opt' + (S.template === k ? ' on' : ''), onclick: () => { S.template = k; draw(); }}, h('div', {style: 'font-size:28px'}, ic), h('b', {}, n), h('span', {}, d)))));
+    b.append(h('label', {class: 'f'}, 'Languages'), ...[['en', 'English'], ['ka', 'ქართული'], ['ru', 'Русский']].map(([l, n]) => h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: S.langs.includes(l), onchange: ev => { S.langs = ev.target.checked ? [...S.langs, l] : S.langs.filter(x => x !== l); }}), n)));
+  } else if (S.step === 1) {
+    b.append(h('h2', {}, 'Name your bot'),
+      h('label', {class: 'f'}, 'Display name'), h('input', {value: S.display, placeholder: 'e.g. My Shop', oninput: ev => { S.display = ev.target.value; if (!S._nameTouched) { S.name = ev.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30); $('#nm').value = S.name; } }}),
+      h('label', {class: 'f'}, 'Internal id'), h('input', {id: 'nm', value: S.name, placeholder: 'my-shop', oninput: ev => { S.name = ev.target.value; S._nameTouched = true; }}),
+      h('div', {class: 'hint'}, 'Letters, digits, - and _. Used for the folder and service name; can’t be changed later.'));
+  } else if (S.step === 2) {
+    b.append(h('h2', {}, 'Connect Telegram'), h('p', {class: 'hint'}, 'Create a bot with @BotFather and paste its token. You can add more tokens (all share one shop) or leave this empty and add it later in the builder — the bot just won’t run until it has a token.'),
+      h('label', {class: 'f'}, 'Bot token(s)'));
+    S.tokens.forEach((t, i) => b.append(h('div', {class: 'tok'}, h('input', {value: t, placeholder: '123456789:AA…', oninput: ev => { S.tokens[i] = ev.target.value.trim(); }, onblur: check}),
+      h('span', {class: 'tag ' + (S.checks[t] ? (S.checks[t].ok ? 'g' : 'r') : '')}, S.checks[t] ? (S.checks[t].ok ? '@' + S.checks[t].username : 'rejected') : '—'))));
+    b.append(h('button', {class: 'btn btn-ghost btn-sm', onclick: () => { S.tokens.push(''); draw(); }}, '＋ another token'),
+      h('label', {class: 'f'}, 'Admin Telegram ID(s)'));
+    S.admins.forEach((a, i) => b.append(h('div', {class: 'tok'}, h('input', {value: a, placeholder: '123456789', oninput: ev => { S.admins[i] = ev.target.value.replace(/\D/g, ''); }}))));
+    b.append(h('button', {class: 'btn btn-ghost btn-sm', onclick: () => { S.admins.push(''); draw(); }}, '＋ another admin'), h('div', {class: 'hint'}, 'Admins get the in-bot admin menu. Find your ID with @userinfobot.'));
+  } else {
+    if (!S.job) { b.append(h('h2', {}, 'Ready to create'), h('div', {class: 'hint'}, `“${S.display || S.name}” — ${({shop: 'Shop bot', shop_categories: 'Shop bot with categories'})[S.template] || 'Blank bot'} · ${S.langs.join(', ')} · ${S.tokens.filter(Boolean).length} token(s)`), h('p', {class: 'hint'}, 'Setting up takes about a minute. The bot is registered in Global Admin automatically.')); }
+    else { const p = h('div', {class: 'prog'}); b.append(h('h2', {}, S.job.status === 'done' ? '✅ Your bot is ready' : S.job.status === 'error' ? '❌ Something went wrong' : 'Creating your bot…'), p);
+      if (S.job.error) b.append(h('div', {style: 'color:var(--red);margin-top:10px'}, S.job.error));
+      if (S.job.status === 'done') b.append(h('div', {style: 'margin-top:16px;display:flex;gap:10px'}, h('a', {class: 'btn btn-primary', href: `/bot/${S.name}/constructor`}, 'Open the builder →'), h('a', {class: 'btn btn-ghost', href: '/global'}, 'Global Admin')));
+      (S.job.steps || []).forEach(s => p.append(h('div', {}, '✓ ' + s.msg))); }
+  }
+  if (S.step < 3 || (S.step === 3 && !S.job)) b.append(h('div', {class: 'nav'}, S.step ? h('button', {class: 'btn btn-ghost', onclick: () => { S.step--; draw(); }}, '← Back') : h('span'),
+    h('button', {class: 'btn btn-primary', id: 'next', onclick: next}, S.step === 3 ? '🚀 Create bot' : 'Next →')));
+}
+async function check() { const t = S.tokens.filter(Boolean); if (!t.length) return; try { const r = await post('/constructor/api/check-tokens', {tokens: t}); r.results.forEach(x => S.checks[x.token] = x); draw(); } catch (e) {} }
+async function next() {
+  if (S.step === 0 && !S.langs.length) { alert('Pick at least one language'); return; }
+  if (S.step === 1) { if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{1,38}$/.test(S.name)) { alert('Internal id: 2–39 characters, letters, digits, - or _'); return; } }
+  if (S.step === 2) { await check(); const bad = S.tokens.filter(t => t && S.checks[t] && !S.checks[t].ok); if (bad.length) { alert('Telegram rejected a token — fix it or clear it.'); return; } }
+  if (S.step < 3) { S.step++; draw(); return; }
+  $('#next').disabled = true; $('#next').textContent = 'Creating…';
+  try {
+    const r = await post('/constructor/api/create', {name: S.name, display_name: S.display || S.name, template: S.template, langs: S.langs, tokens: S.tokens.filter(Boolean), admins: S.admins.filter(Boolean)});
+    S.job = {status: 'running', steps: []}; draw(); poll(r.job);
+  } catch (e) { alert(e.message); $('#next').disabled = false; $('#next').textContent = '🚀 Create bot'; }
+}
+async function poll(id) { const r = await fetch('/constructor/api/job/' + id); S.job = await r.json(); draw(); if (S.job.status === 'running') setTimeout(() => poll(id), 1200); }
+draw();
+</script>
+{% endblock %}

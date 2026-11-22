@@ -1,733 +1,1381 @@
-{% extends "base.html" %}
-{% block title %}Constructor — {{ display_name }}{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Builder — {{ display_name }}</title>
 <style>
-    .cx-tabs { display:flex; gap:8px; margin-bottom:16px; }
-    .cx-tab { padding:8px 18px; border-radius:8px; background:var(--bg3); color:var(--text2);
-              cursor:pointer; font-size:14px; border:1px solid var(--border); }
-    .cx-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+:root{--bg:#0f1117;--bg2:#1a1d27;--bg3:#242836;--border:#2e3345;--text:#e1e4ed;--text2:#8b8fa3;--accent:#6c5ce7;--accent2:#a29bfe;--green:#00b894;--red:#e17055;--yellow:#fdcb6e;--blue:#74b9ff;--radius:10px}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);overflow:hidden;font-size:14px}
+button{font-family:inherit;font-size:13px;cursor:pointer;color:var(--text);background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 11px}
+button:hover{border-color:var(--accent2)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{filter:brightness(1.1)}
+button.good{background:var(--green);border-color:var(--green);color:#04281f;font-weight:700}
+button.danger{color:var(--red)}
+button.ghost{background:transparent}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent2)}
+textarea{resize:vertical;min-height:90px;line-height:1.45}
+label.f{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin:12px 0 5px}
+.hint{font-size:12px;color:var(--text2);line-height:1.45;margin-top:5px}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:0 0 auto}.row>.grow{flex:1 1 auto;min-width:0}
+.mut{color:var(--text2)}
 
-    .cx-grid { display:grid; grid-template-columns: 240px 1fr 300px; gap:16px; align-items:start; }
-    @media (max-width: 1100px){ .cx-grid { grid-template-columns:1fr; } }
+/* top bar */
+#top{height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--bg2);border-bottom:1px solid var(--border)}
+#top .title{font-weight:700;font-size:15px;white-space:nowrap}
+#top .sp{flex:1}
+#status{font-size:12px;padding:4px 10px;border-radius:12px;background:var(--bg3);color:var(--text2);white-space:nowrap}
+#status.dirty{background:rgba(253,203,110,.15);color:var(--yellow)}
+#status.ok{background:rgba(0,184,148,.15);color:var(--green)}
+.langtabs{display:flex;gap:4px}
+.langtabs button{padding:4px 9px;font-size:12px}
+.langtabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#issuesBtn.has{color:var(--yellow);border-color:var(--yellow)}
+#issuesBtn.err{color:var(--red);border-color:var(--red)}
 
-    .cx-pagelist { display:flex; flex-direction:column; gap:6px; }
-    .cx-page-item { padding:10px 12px; border-radius:8px; background:var(--bg3);
-                    border:1px solid var(--border); cursor:pointer; font-size:14px;
-                    display:flex; align-items:center; justify-content:space-between; gap:6px; }
-    .cx-page-item.active { border-color:var(--accent); background:rgba(108,92,231,0.15); }
-    .cx-page-item .pid { font-weight:600; }
-    .cx-badge-start { font-size:10px; background:var(--green); color:#062; padding:2px 6px;
-                      border-radius:10px; font-weight:700; }
+/* layout */
+#main{display:flex;height:calc(100vh - 52px)}
+#canvasWrap{flex:1;position:relative;overflow:hidden;background:var(--bg);background-image:radial-gradient(var(--border) 1px,transparent 1px);background-size:24px 24px}
+#world{position:absolute;left:0;top:0;transform-origin:0 0}
+#edges{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+.tools{position:absolute;left:12px;top:12px;display:flex;gap:6px;z-index:5}
+.zoom{position:absolute;left:12px;bottom:12px;display:flex;gap:4px;z-index:5}
+.tips{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);font-size:12px;color:var(--text2);background:rgba(26,29,39,.9);padding:5px 12px;border-radius:14px;z-index:4;pointer-events:none;white-space:nowrap}
+.node{position:absolute;width:230px;background:var(--bg2);border:2px solid var(--border);border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.35);user-select:none}
+.node.sel{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(162,155,254,.2),0 4px 18px rgba(0,0,0,.35)}
+.node.warn{border-color:var(--yellow)}
+.node.dropok{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,184,148,.25)}
+.nh{padding:8px 10px;display:flex;align-items:center;gap:7px;cursor:grab;border-bottom:1px solid var(--border);border-radius:10px 10px 0 0;background:var(--bg3)}
+.nh .ic{font-size:15px}.nh .nt{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nh .st{font-size:10px;background:var(--green);color:#04281f;padding:2px 6px;border-radius:9px;font-weight:700}
+.nb{padding:8px 10px 6px;font-size:12px;color:var(--text2);line-height:1.4;max-height:58px;overflow:hidden}
+.chips{padding:2px 8px 8px}
+.chip{position:relative;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 22px 4px 8px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.chip:hover{border-color:var(--accent2)}
+.chip.rowmark{border-top-color:var(--accent)}
+.chip .port{position:absolute;right:-1px;top:50%;width:14px;height:14px;margin-top:-7px;border-radius:50%;background:var(--accent);border:2px solid var(--bg2);cursor:crosshair}
+.chip .port:hover{background:var(--green);transform:scale(1.25)}
+.nempty{font-size:12px;color:var(--text2);padding:2px 10px 10px;font-style:italic}
+.edge{fill:none;stroke-width:2;opacity:.75}
+.edge.page{stroke:var(--accent2)}.edge.choose{stroke:var(--blue)}.edge.confirm{stroke:var(--green)}.edge.flow{stroke:var(--yellow);stroke-dasharray:6 4}
+.edge.back{opacity:.22;stroke-dasharray:3 4}
+.edge.hot{opacity:1;stroke-width:3;stroke-dasharray:none}
 
-    .cx-row-box { border:1px dashed var(--border); border-radius:8px; padding:8px; margin-bottom:8px; background:var(--bg); }
-    .cx-row-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
-    .cx-row-head .lbl { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
-    .cx-btn-card { border:1px solid var(--border); border-radius:8px; padding:8px; margin-bottom:6px; background:var(--bg2); }
-    .cx-btn-card .cx-line { display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
-    .cx-mini { padding:4px 8px; font-size:12px; border:1px solid var(--border); background:var(--bg3);
-               color:var(--text); border-radius:6px; cursor:pointer; }
-    .cx-mini:hover { border-color:var(--accent2); }
-    .cx-input { padding:7px 10px; background:var(--bg); border:1px solid var(--border);
-                border-radius:6px; color:var(--text); font-size:13px; }
-    .cx-input:focus { outline:none; border-color:var(--accent); }
-    select.cx-input { cursor:pointer; }
+/* inspector */
+#side{width:410px;flex:0 0 410px;background:var(--bg2);border-left:1px solid var(--border);overflow-y:auto;padding:14px 16px 60px}
+#side h3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin:20px 0 8px;display:flex;align-items:center;gap:8px}
+#side h3 .ln{flex:1;height:1px;background:var(--border)}
+.empty{color:var(--text2);text-align:center;padding:50px 20px;line-height:1.6}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg .opt{padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--bg)}
+.seg .opt.on{border-color:var(--accent2);background:rgba(108,92,231,.15)}
+.seg .opt b{display:block;font-size:13px}.seg .opt span{font-size:11px;color:var(--text2)}
+.fmtbar{display:flex;gap:4px;margin-bottom:5px;flex-wrap:wrap}
+.fmtbar button{padding:3px 8px;font-size:12px}
+.rowbox{border:1px dashed var(--border);border-radius:9px;padding:8px;margin-bottom:8px;background:var(--bg)}
+.rowhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.btnline{display:flex;gap:6px;flex-wrap:wrap}
+.bchip{display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:4px 4px 4px 9px;font-size:12px;cursor:pointer;max-width:100%}
+.bchip.on{border-color:var(--accent2);background:rgba(108,92,231,.18)}
+.bchip .tx{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bchip .x{padding:0 5px;border:none;background:none;color:var(--text2);font-size:12px}
+.bchip .x:hover{color:var(--red)}
+.bed{border:1px solid var(--accent2);border-radius:9px;padding:10px 12px 12px;margin:8px 0 10px;background:var(--bg3)}
+.bed .acts{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap}
+.card{border:1px solid var(--border);background:var(--bg);border-radius:9px;padding:10px 12px;margin-bottom:8px}
+.tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:9px;background:var(--bg3);color:var(--text2);margin-left:4px}
+.tag.g{background:rgba(0,184,148,.15);color:var(--green)}
+.tag.y{background:rgba(253,203,110,.15);color:var(--yellow)}
+.tag.r{background:rgba(225,112,85,.15);color:var(--red)}
+details.adv>summary{cursor:pointer;color:var(--text2);font-size:12px;margin:14px 0 6px;user-select:none}
+.chk{display:flex;align-items:center;gap:8px;margin:8px 0;cursor:pointer}
+.chk input{width:auto}
 
-    .cx-lang-tabs { display:flex; gap:4px; margin-bottom:8px; }
-    .cx-lang-tab { padding:4px 12px; font-size:12px; border-radius:6px; background:var(--bg3);
-                   color:var(--text2); cursor:pointer; border:1px solid var(--border); }
-    .cx-lang-tab.active { background:var(--accent2); color:#111; }
+/* phone */
+#phone{position:absolute;right:14px;bottom:14px;width:300px;z-index:6;background:#0e1621;border:1px solid var(--border);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.55);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100% - 28px)}
+#phone .ph{background:#17212b;padding:9px 12px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+#phone .ph .av{width:26px;height:26px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px}
+#phone .ph button{margin-left:auto;padding:2px 8px}
+#phone .chat{padding:12px 10px;overflow-y:auto;flex:1}
+.bub{background:#182533;border-radius:12px 12px 12px 3px;overflow:hidden;font-size:13px;line-height:1.4;color:#e8eef5;word-wrap:break-word}
+.bub img,.bub video{display:block;width:100%;max-height:200px;object-fit:cover}
+.bub .noimg{background:#1f3347;color:#7e9bb5;font-size:11px;padding:30px 10px;text-align:center}
+.bub .tx{padding:8px 11px;white-space:normal}
+.bub code{background:#0e1621;padding:1px 5px;border-radius:4px;font-family:ui-monospace,monospace;font-size:12px}
+.bub a{color:#6ab3f3}
+.kb{margin-top:5px;display:flex;flex-direction:column;gap:4px}
+.kb .kr{display:flex;gap:4px}
+.kb button{flex:1;background:#2b5278;border:none;color:#fff;padding:8px 6px;font-size:12px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kb button:hover{background:#34628f}
+.phnote{font-size:11px;color:#7e9bb5;margin-top:8px;text-align:center}
+.askbox{display:flex;gap:4px;margin-top:8px}.askbox input{background:#17212b;border-color:#2b3947}
 
-    /* Telegram-like preview */
-    .tg-preview { background:#17212b; border-radius:12px; padding:12px; }
-    .tg-photo { width:100%; height:120px; border-radius:8px; object-fit:cover; background:#0e1621;
-                display:flex; align-items:center; justify-content:center; color:#5a6b7b; font-size:12px; }
-    .tg-caption { color:#e7eef5; font-size:13px; white-space:pre-wrap; margin:8px 2px; line-height:1.4; }
-    .tg-kb { display:flex; flex-direction:column; gap:5px; }
-    .tg-kb-row { display:flex; gap:5px; }
-    .tg-key { flex:1; background:#2b5278; color:#fff; text-align:center; padding:8px 4px;
-              border-radius:7px; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-
-    .cx-token-row { display:flex; gap:6px; margin-bottom:6px; }
-    .cx-token-row .cx-input { flex:1; }
-    .cx-help { font-size:12px; color:var(--text2); margin-top:4px; }
-    .cx-save-bar { position:sticky; bottom:0; background:var(--bg2); border-top:1px solid var(--border);
-                   padding:12px 0; margin-top:16px; display:flex; gap:8px; justify-content:flex-end; }
-    .cx-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-                background:var(--bg3); border:1px solid var(--border); padding:10px 18px;
-                border-radius:8px; font-size:14px; opacity:0; transition:opacity .25s; z-index:300; }
-    .cx-toast.show { opacity:1; }
-    .cx-toast.ok { border-color:var(--green); color:var(--green); }
-    .cx-toast.err { border-color:var(--red); color:var(--red); }
+/* modals */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:min(920px,100%);max-height:90vh;display:flex;flex-direction:column}
+.modal.sm{width:min(520px,100%)}
+.mh{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.mh h2{font-size:16px;flex:1}
+.mb{padding:16px 18px;overflow-y:auto;flex:1}
+.mf{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.stabs{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--border);overflow-x:auto}
+.stabs button{border:none;border-bottom:2px solid transparent;border-radius:0;background:none;padding:11px 14px;color:var(--text2);white-space:nowrap}
+.stabs button.on{color:var(--text);border-bottom-color:var(--accent2)}
+.imggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.imgc{border:2px solid var(--border);border-radius:9px;overflow:hidden;cursor:pointer;background:var(--bg);position:relative}
+.imgc:hover,.imgc.on{border-color:var(--accent2)}
+.imgc img,.imgc video{display:block;width:100%;height:90px;object-fit:cover}
+.imgc .kd{position:absolute;left:4px;top:4px;background:#000a;color:#fff;font-size:10px;padding:1px 5px;border-radius:4px}
+.imgc .nm{font-size:11px;padding:4px 6px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imgc .del{position:absolute;top:3px;right:3px;padding:0 6px;background:rgba(0,0,0,.7);border-color:transparent}
+.drop{border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;color:var(--text2);margin-bottom:12px}
+.drop.over{border-color:var(--accent2);background:rgba(108,92,231,.1)}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);padding:10px 18px;border-radius:10px;z-index:90;display:none;max-width:80vw}
+#toast.err{border-color:var(--red);color:var(--red)}#toast.ok{border-color:var(--green)}
+.iss{display:flex;gap:8px;padding:8px 10px;border-radius:8px;background:var(--bg);margin-bottom:6px;cursor:pointer;border:1px solid var(--border)}
+.iss:hover{border-color:var(--accent2)}
+table.t{width:100%;border-collapse:collapse}table.t td,table.t th{padding:6px 6px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+table.t th{font-size:11px;text-transform:uppercase;color:var(--text2);letter-spacing:.5px}
+@media (max-width:1100px){ #side{width:340px;flex-basis:340px} #phone{width:260px}}
 </style>
-
-<div class="page-header">
-    <h1>🧩 Constructor <span style="color:var(--text2);font-size:14px;font-weight:400;">— {{ display_name }}</span></h1>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← Dashboard</a>
+</head>
+<body>
+<script>const NAME={{ name|tojson }},DISPLAY={{ display_name|tojson }};</script>
+<div id="top">
+  <a href="/constructor" class="mut" style="text-decoration:none" title="All constructor bots">← Bots</a>
+  <span class="title" id="botTitle"></span>
+  <span id="status">Loading…</span>
+  <span class="sp"></span>
+  <span class="mut" style="font-size:12px">Editing</span><div class="langtabs" id="langTabs"></div>
+  <button id="undoBtn" title="Undo (Ctrl+Z)">↶</button><button id="redoBtn" title="Redo (Ctrl+Shift+Z)">↷</button>
+  <button id="issuesBtn">✔ No problems</button>
+  <button id="phoneBtn">📱 Preview</button>
+  <button id="settingsBtn">⚙ Settings</button>
+  <button class="good" id="publishBtn" title="Ctrl+S">Publish</button>
 </div>
-
-<div class="cx-tabs">
-    <div class="cx-tab active" data-tab="menu" onclick="cxTab('menu')">Menu Builder</div>
-    <div class="cx-tab" data-tab="env" onclick="cxTab('env')">Tokens &amp; Payments</div>
+<div id="main">
+  <div id="canvasWrap">
+    <div class="tools"><button class="primary" id="addScreen">＋ New screen</button><button id="addFlow" title="Add a ready-made shop flow (cities, categories, listing, districts, payment…)">🧩 Add a flow</button><button id="autoLayout" title="Tidy up the screen layout">⇄ Auto-arrange</button><button id="fitBtn">⤢ Fit</button></div>
+    <div id="world"><svg id="edges"></svg><div id="nodes"></div></div>
+    <div class="zoom"><button id="zOut">−</button><button id="zIn">＋</button></div>
+    <div class="tips" id="tips">Drag screens to arrange · drag from a button's dot to a screen to connect them · scroll to zoom</div>
+    <div id="phone"></div>
+  </div>
+  <div id="side"></div>
 </div>
-
-<!-- ═══════════ MENU BUILDER ═══════════ -->
-<div id="tab-menu">
-  <div class="cx-grid">
-    <!-- pages -->
-    <div class="card">
-        <h2>Pages</h2>
-        <div class="cx-pagelist" id="pageList"></div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%;" onclick="addPage()">+ Add Page</button>
-    </div>
-
-    <!-- editor -->
-    <div class="card">
-        <h2 id="editorTitle">Page</h2>
-        <div id="pageEditor"></div>
-    </div>
-
-    <!-- preview -->
-    <div class="card">
-        <h2>Preview</h2>
-        <div class="cx-lang-tabs" id="previewLangTabs"></div>
-        <div class="tg-preview" id="preview"></div>
-    </div>
-  </div>
-
-  <div class="cx-save-bar">
-    <button class="btn btn-primary" onclick="saveConfig(false)">💾 Save</button>
-    <button class="btn btn-green" onclick="saveConfig(true)">💾 Save &amp; Restart</button>
-  </div>
-</div>
-
-<!-- ═══════════ TOKENS & PAYMENTS ═══════════ -->
-<div id="tab-env" style="display:none;">
-  <div class="card">
-    <h2>Bot Tokens</h2>
-    <div class="cx-help">One token per bot. All listed bots share this menu and admin panel.</div>
-    <div id="tokenList" style="margin-top:10px;"></div>
-    <button class="btn btn-ghost btn-sm" onclick="addToken()">+ Add Token</button>
-  </div>
-
-  <div class="card">
-    <h2>Admin IDs</h2>
-    <div class="cx-help">Numeric Telegram user IDs that get the admin panel button inside the bot.</div>
-    <div id="adminList" style="margin-top:10px;"></div>
-    <button class="btn btn-ghost btn-sm" onclick="addAdmin()">+ Add Admin ID</button>
-  </div>
-
-  <div class="card">
-    <h2>Crypto Wallets</h2>
-    <div class="form-group"><label>BTC wallet</label><input class="cx-input" style="width:100%" id="wBtc" placeholder="bc1..."></div>
-    <div class="form-group"><label>LTC wallet</label><input class="cx-input" style="width:100%" id="wLtc" placeholder="ltc1..."></div>
-    <div class="form-group"><label>USDT (TRC20) wallet</label><input class="cx-input" style="width:100%" id="wUsdt" placeholder="T..."></div>
-  </div>
-
-  <div class="cx-save-bar">
-    <button class="btn btn-primary" onclick="saveEnv(false)">💾 Save</button>
-    <button class="btn btn-green" onclick="saveEnv(true)">💾 Save &amp; Restart</button>
-  </div>
-</div>
-
-<div class="cx-toast" id="toast"></div>
-
-<input type="file" id="imgUpload" accept="image/*" style="display:none;">
-<script>const BOT_NAME = "{{ name }}";</script>
+<div id="toast"></div>
+<div id="modalRoot"></div>
 {% raw %}
 <script>
-const BUILTINS = [
-    {key:"products", label:"Show products"},
-    {key:"balance",  label:"Balance screen"},
-    {key:"language", label:"Language picker"},
+// ══ helpers ═════════════════════════════════════════════════════════════
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (k === 'value') e.value = v;
+    else if (k === 'checked' || k === 'disabled' || k === 'selected') e[k] = !!v;
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat(Infinity)) { if (k === null || k === undefined || k === false) continue; e.append(k.nodeType ? k : document.createTextNode(String(k))); }
+  return e;
+}
+const LANG_NAMES = {en: 'English', ka: 'ქართული', ru: 'Русский'};
+const TYPE_INFO = {
+  message: {ic: '💬', name: 'Message', sub: 'Text, image and buttons'},
+  input: {ic: '⌨️', name: 'Ask for input', sub: 'Waits for the user to type'},
+  list: {ic: '🛍', name: 'Item list', sub: 'Cities, categories, products or districts from the shop'},
+  receipt: {ic: '💳', name: 'Payment', sub: 'Crypto address + amount'},
+  history: {ic: '🧾', name: 'Purchase history', sub: 'Lists what the user bought'},
+};
+const BUILTINS = {products: 'Shop products', balance: 'Balance & top-up', language: 'Language picker'};
+const ADMIN_ITEMS = [
+  ['products', '📦 Products'], ['districts', '🗺 Districts'], ['broadcast', '📢 Announcement'], ['dm', '✉ Direct message'],
+  ['scheduled', '📅 Scheduled posts'], ['private', '🔒 Private listings'], ['users', '👥 Users'], ['purchases', '🧾 Purchase history'], ['stats', '📊 Statistics'],
+];
+const KNOWN_COINS = {BTC: 'bitcoin', LTC: 'litecoin', ETH: 'ethereum', TRX: 'tron', TON: 'the-open-network', SOL: 'solana', DOGE: 'dogecoin', XRP: 'ripple', BNB: 'binancecoin', BCH: 'bitcoin-cash'};
+const DEFAULT_COINS = [
+  {code: 'BTC', label: 'Bitcoin', cg_id: 'bitcoin', stable: false, enabled: true},
+  {code: 'LTC', label: 'Litecoin', cg_id: 'litecoin', stable: false, enabled: true},
+  {code: 'USDT', label: 'USDT TRC20', cg_id: '', stable: true, enabled: true},
 ];
 
-let config = null;
-let currentPage = null;
-let currentLang = "ka";
-let images = [];
-
-function toast(msg, ok=true){
-    const t = document.getElementById("toast");
-    t.textContent = msg;
-    t.className = "cx-toast show " + (ok?"ok":"err");
-    setTimeout(()=>{ t.className = "cx-toast"; }, 2600);
+let toastT;
+function toast(msg, kind = '') { const t = $('#toast'); t.textContent = msg; t.className = kind; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', kind === 'err' ? 6000 : 2600); }
+async function api(path, opts = {}) {
+  const o = {method: opts.method || (opts.body ? 'POST' : 'GET'), headers: opts.hdr ? {'X-GA': '1'} : {}};
+  if (opts.body instanceof FormData) o.body = opts.body;
+  else if (opts.body) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
+  const r = await fetch(path, o);
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
 }
+const B = p => `/bot/${NAME}${p}`;
+const clone = o => JSON.parse(JSON.stringify(o));
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-function api(path, opts){ return fetch("/bot/"+BOT_NAME+path, opts); }
+// ══ state ═══════════════════════════════════════════════════════════════
+let cfg = null, publishedStr = '', sel = null, editLang = 'en', selBtn = null;   // selBtn = [row, col]
+let undoStack = [], redoStack = [], lastPush = 0;
+let envState = null, envOrig = '', sysStrings = {}, previewData = {products: [], districts: []}, images = [];
+let view = {x: 40, y: 40, s: 1};
+let pv = {page: null, vars: {}, history: []};
+let showPhone = true;
+const dirtyCfg = () => JSON.stringify(cfg) !== publishedStr;
+const dirtyEnv = () => !!envState && JSON.stringify(envState) !== envOrig;
+const dirty = () => dirtyCfg() || dirtyEnv();
 
-async function boot(){
-    const r = await api("/api/menu-config");
-    const j = await r.json();
-    config = j.config ? j.config : j;
-    if(!config.langs || !config.langs.length) config.langs = ["ka"];
-    currentLang = config.default_lang || config.langs[0];
-    currentPage = config.start_page in config.pages ? config.start_page : Object.keys(config.pages)[0];
-    await loadImages();
-    renderAll();
-    await loadEnv();
-}
-
-async function loadImages(){
-    try{ const r = await api("/api/images"); const j = await r.json(); images = (j.images||[]).map(x=>x.name); }
-    catch(e){ images = []; }
-}
-
-function renderAll(){
-    renderPageList();
-    renderLangTabsForPreview();
-    renderEditor();
-    renderPreview();
-}
-
-/* ── page list ── */
-function renderPageList(){
-    const el = document.getElementById("pageList");
-    el.innerHTML = "";
-    Object.keys(config.pages).forEach(pid=>{
-        const d = document.createElement("div");
-        d.className = "cx-page-item" + (pid===currentPage?" active":"");
-        d.onclick = ()=>{ currentPage = pid; renderAll(); };
-        const isStart = pid===config.start_page;
-        d.innerHTML = `<span class="pid">${esc(pid)}</span>` +
-            (isStart?`<span class="cx-badge-start">START</span>`:"");
-        el.appendChild(d);
-    });
-}
-
-/* ── language tabs (shared) ── */
-function renderLangTabsForPreview(){
-    const wrap = document.getElementById("previewLangTabs");
-    wrap.innerHTML = "";
-    config.langs.forEach(l=>{
-        const t = document.createElement("div");
-        t.className = "cx-lang-tab" + (l===currentLang?" active":"");
-        t.textContent = l.toUpperCase();
-        t.onclick = ()=>{ currentLang = l; renderEditor(); renderPreview(); renderLangTabsForPreview(); };
-        wrap.appendChild(t);
-    });
-}
-
-/* ── page editor ── */
-function renderEditor(){
-    const page = config.pages[currentPage];
-    document.getElementById("editorTitle").textContent = "Page: " + currentPage;
-    const e = document.getElementById("pageEditor");
-
-    let imgOptions = `<option value="">— none —</option>`;
-    images.forEach(im=>{ imgOptions += `<option value="${esc(im)}" ${page.image===im?"selected":""}>${esc(im)}</option>`; });
-
-    e.innerHTML = `
-      <div class="form-group">
-        <label>Page ID</label>
-        <div style="display:flex;gap:6px;">
-          <input class="cx-input" style="flex:1" id="pgId" value="${esc(currentPage)}">
-          <button class="cx-mini" onclick="renamePage()">Rename</button>
-          <button class="cx-mini" onclick="setStart()" ${currentPage===config.start_page?"disabled":""}>Set as START</button>
-          <button class="cx-mini" style="color:var(--red)" onclick="deletePage()">Delete</button>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>Page type</label>
-        <select class="cx-input" style="width:100%" onchange="setType(this.value)">
-          <option value="message" ${(page.type||'message')==='message'?'selected':''}>Message — image + text + buttons</option>
-          <option value="list"    ${page.type==='list'?'selected':''}>List — auto buttons from products / districts</option>
-          <option value="input"   ${page.type==='input'?'selected':''}>Input — ask the user to type something</option>
-          <option value="receipt" ${page.type==='receipt'?'selected':''}>Receipt — crypto payment (wallet + QR + amount)</option>
-        </select>
-      </div>
-
-      <div id="typeConfig"></div>
-
-      <div class="form-group">
-        <label>Image ${page.type==='receipt'?'(ignored when QR is on)':''}</label>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <select class="cx-input" style="flex:1" id="pgImage" onchange="setImage(this.value)">${imgOptions}</select>
-          <button class="cx-mini" onclick="document.getElementById('imgUpload').click()">Upload</button>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label style="cursor:pointer;">
-          <input type="checkbox" id="pgAdmin" ${page.show_admin_button?"checked":""} onchange="setAdmin(this.checked)">
-          Show admin-panel button (visible only to admin IDs)
-        </label>
-      </div>
-
-      <div class="form-group">
-        <label>Caption text — <b>${currentLang.toUpperCase()}</b></label>
-        <div class="cx-lang-tabs" id="editLangTabs"></div>
-        <textarea class="cx-input" style="width:100%;min-height:80px;font-family:inherit;"
-          id="pgText" oninput="setText(this.value)">${esc(pickText(page.text, currentLang))}</textarea>
-        <div class="cx-help">Placeholders: {balance} {bot_username} {user_id} {referrals} {earned}</div>
-      </div>
-
-      <div class="form-group">
-        <label>Buttons</label>
-        <div id="rowsBox"></div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="addRow()">+ Add Row</button>
-      </div>
-    `;
-    // edit-lang tabs (mirror preview tabs)
-    const elt = document.getElementById("editLangTabs");
-    config.langs.forEach(l=>{
-        const t = document.createElement("div");
-        t.className = "cx-lang-tab" + (l===currentLang?" active":"");
-        t.textContent = l.toUpperCase();
-        t.onclick = ()=>{ currentLang = l; renderEditor(); renderPreview(); renderLangTabsForPreview(); };
-        elt.appendChild(t);
-    });
-    renderTypeConfig();
-    renderRows();
-}
-
-function renderTypeConfig(){
-    const page = config.pages[currentPage];
-    const box = document.getElementById("typeConfig");
-    if(!box) return;
-    const pageOpts = (sel)=> Object.keys(config.pages).map(p=>
-        `<option value="${esc(p)}" ${sel===p?"selected":""}>${esc(p)}</option>`).join("");
-
-    if(page.type==="input"){
-        const inp = page.input || (page.input={var:"amount",kind:"number",min:null,max:null,regex:"",error:{},next:""});
-        box.innerHTML = `
-          <div class="cx-row-box">
-            <div class="cx-row-head"><span class="lbl">Input settings</span></div>
-            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Save to variable</span>
-              <input class="cx-input" style="flex:1" value="${esc(inp.var||'')}" oninput="setInp('var',this.value)"></div>
-            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Kind</span>
-              <select class="cx-input" onchange="setInp('kind',this.value)">
-                <option value="number" ${inp.kind==='number'?'selected':''}>Number</option>
-                <option value="text" ${inp.kind!=='number'?'selected':''}>Text</option>
-              </select></div>
-            ${inp.kind==='number' ? `
-            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Min / Max</span>
-              <input class="cx-input" style="width:90px" type="number" value="${inp.min??''}" placeholder="min" oninput="setInp('min',this.value)">
-              <input class="cx-input" style="width:90px" type="number" value="${inp.max??''}" placeholder="max" oninput="setInp('max',this.value)"></div>` : `
-            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Regex (optional)</span>
-              <input class="cx-input" style="flex:1" value="${esc(inp.regex||'')}" oninput="setInp('regex',this.value)"></div>`}
-            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">On error (${currentLang.toUpperCase()})</span>
-              <input class="cx-input" style="flex:1" value="${esc(pickText(inp.error,currentLang))}" oninput="setInpErr(this.value)"></div>
-            <div class="cx-line"><span style="width:110px;color:var(--text2);font-size:12px;">Next page →</span>
-              <select class="cx-input" style="flex:1" onchange="setInp('next',this.value)"><option value="">— pick —</option>${pageOpts(inp.next)}</select></div>
-          </div>`;
-    } else if(page.type==="receipt"){
-        const rc = page.receipt || (page.receipt={coin_var:"crypto",coin_fixed:"",amount_var:"amount",fiat_to_usd:1.0,use_qr:true,request_id_var:"request_id"});
-        box.innerHTML = `
-          <div class="cx-row-box">
-            <div class="cx-row-head"><span class="lbl">Receipt settings</span></div>
-            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Coin from variable</span>
-              <input class="cx-input" style="flex:1" value="${esc(rc.coin_var||'')}" placeholder="crypto" oninput="setRc('coin_var',this.value)"></div>
-            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">…or fixed coin</span>
-              <select class="cx-input" onchange="setRc('coin_fixed',this.value)">
-                <option value="" ${!rc.coin_fixed?'selected':''}>(use variable)</option>
-                <option value="BTC" ${rc.coin_fixed==='BTC'?'selected':''}>BTC</option>
-                <option value="LTC" ${rc.coin_fixed==='LTC'?'selected':''}>LTC</option>
-                <option value="USDT" ${rc.coin_fixed==='USDT'?'selected':''}>USDT</option>
-              </select></div>
-            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Amount from variable</span>
-              <input class="cx-input" style="flex:1" value="${esc(rc.amount_var||'')}" placeholder="amount" oninput="setRc('amount_var',this.value)"></div>
-            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Amount→USD rate</span>
-              <input class="cx-input" style="width:110px" type="number" step="0.0001" value="${rc.fiat_to_usd??1}" oninput="setRc('fiat_to_usd',this.value)">
-              <span style="color:var(--text2);font-size:11px;">1 = amount is USD · 0.37 ≈ GEL</span></div>
-            <div class="cx-line"><span style="width:130px;color:var(--text2);font-size:12px;">Request-id variable</span>
-              <input class="cx-input" style="flex:1" value="${esc(rc.request_id_var||'request_id')}" oninput="setRc('request_id_var',this.value)"></div>
-            <div class="cx-line"><label style="cursor:pointer;font-size:13px;">
-              <input type="checkbox" ${rc.use_qr!==false?'checked':''} onchange="setRc('use_qr',this.checked)"> Show QR code as the image</label></div>
-            <div class="cx-help">Caption placeholders: {coin} {wallet} {crypto_amount} {amount} {usd_amount} {request_id}</div>
-          </div>`;
-    } else if(page.type==="list"){
-        box.innerHTML = `
-          <div class="cx-row-box">
-            <div class="cx-row-head"><span class="lbl">List settings</span></div>
-            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Source</span>
-              <select class="cx-input" onchange="setL('source',this.value)">
-                <option value="products" ${(page.source||'products')==='products'?'selected':''}>Products</option>
-                <option value="districts" ${page.source==='districts'?'selected':''}>Districts</option>
-              </select></div>
-            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">City</span>
-              <input class="cx-input" style="flex:1" value="${esc(page.city||'tbilisi')}" oninput="setL('city',this.value)"></div>
-            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Save slug to var</span>
-              <input class="cx-input" style="flex:1" value="${esc(page.item_var||'product')}" oninput="setL('item_var',this.value)"></div>
-            <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Open page →</span>
-              <select class="cx-input" style="flex:1" onchange="setL('item_target',this.value)"><option value="">— pick —</option>${Object.keys(config.pages).map(p=>`<option value="${esc(p)}" ${page.item_target===p?'selected':''}>${esc(p)}</option>`).join("")}</select></div>
-            <div class="cx-help">One button per item is generated automatically. Static buttons below are appended after them.</div>
-          </div>` + itemLookupHTML(page);
-    } else {
-        box.innerHTML = itemLookupHTML(page);
+function normalize(c) {
+  c.langs = (c.langs && c.langs.length ? c.langs : ['en']);
+  c.default_lang = c.langs.includes(c.default_lang) ? c.default_lang : c.langs[0];
+  const dl = c.default_lang;
+  const ml = v => typeof v === 'string' ? {[dl]: v} : (v && typeof v === 'object' ? v : {});
+  for (const [id, p] of Object.entries(c.pages)) {
+    p.type = p.type || 'message';
+    p.text = ml(p.text); p.rows = p.rows || [];
+    p.parse_mode = p.parse_mode === undefined ? 'HTML' : p.parse_mode;
+    p.image = p.image || '';
+    for (const row of p.rows) for (const b of row) { b.label = ml(b.label); b.action = b.action || 'noop'; }
+    if (p.input) p.input.error = ml(p.input.error);
+    if (p.on_enter) {
+      p.on_enter.notify_admins = ml(p.on_enter.notify_admins);
+      p.on_enter.send = (p.on_enter.send || []).map(x => ({text: ml(x.text), image: x.image || ''}));
     }
+    if (p.history) { p.history.line = ml(p.history.line); p.history.empty = ml(p.history.empty); if (p.history.fake) p.history.fake.line = ml(p.history.fake.line); }
+  }
+  if (c.gate) for (const k of ['text', 'join_label', 'check_label', 'fail_text']) c.gate[k] = ml(c.gate[k]);
+  c._layout = c._layout || {};
+  c.strings = c.strings || {};
+  c.admin_menu = c.admin_menu || {hidden: []};
+  c.payments = c.payments || {};
+  return c;
 }
 
-function itemLookupHTML(page){
-    const il = page.item_lookup || {source:"",var:"product",city:"tbilisi"};
-    const on = !!(page.item_lookup && page.item_lookup.source);
-    return `
-      <div class="cx-row-box">
-        <div class="cx-row-head"><span class="lbl">Item fields (for {name} {price} {description})</span>
-          <label style="font-size:12px;cursor:pointer;"><input type="checkbox" ${on?'checked':''} onchange="toggleIL(this.checked)"> use</label></div>
-        ${on ? `
-        <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">From</span>
-          <select class="cx-input" onchange="setIL('source',this.value)">
-            <option value="products" ${il.source==='products'?'selected':''}>Products</option>
-            <option value="districts" ${il.source==='districts'?'selected':''}>Districts</option>
-          </select></div>
-        <div class="cx-line"><span style="width:120px;color:var(--text2);font-size:12px;">Slug in variable</span>
-          <input class="cx-input" style="flex:1" value="${esc(il.var||'product')}" oninput="setIL('var',this.value)"></div>
-        <div class="cx-help">Loads the chosen item so this page's text can use {name} {price} {description}. A receipt after it can use {price} as the amount.</div>
-        ` : `<div class="cx-help">Turn on for a product/district detail page.</div>`}
-      </div>`;
+// ── mutation with undo ──────────────────────────────────────────────────
+function snapshot(coalesceKey) {
+  const now = Date.now();
+  if (coalesceKey && coalesceKey === snapshot.key && now - lastPush < 1200) { lastPush = now; return; }
+  snapshot.key = coalesceKey || null; lastPush = now;
+  undoStack.push(JSON.stringify(cfg)); if (undoStack.length > 80) undoStack.shift(); redoStack = [];
+}
+snapshot.key = null;
+function restoreSnap(s) { cfg = JSON.parse(s); if (!cfg.pages[sel]) sel = null; selBtn = null; fullRender(); }
+function undo() { if (!undoStack.length) return; redoStack.push(JSON.stringify(cfg)); restoreSnap(undoStack.pop()); }
+function redo() { if (!redoStack.length) return; undoStack.push(JSON.stringify(cfg)); restoreSnap(redoStack.pop()); }
+function touched(opts = {}) {   // call after changing cfg
+  try { localStorage.setItem('cx-draft-' + NAME, JSON.stringify(cfg)); } catch (e) {}
+  renderCanvas(); renderPreview(); renderTop();
+  if (opts.inspector) renderInspector();
 }
 
-function setType(t){
-    const p = config.pages[currentPage];
-    p.type = t;
-    if(t==="input" && !p.input) p.input={var:"amount",kind:"number",min:null,max:null,regex:"",error:{},next:""};
-    if(t==="receipt" && !p.receipt) p.receipt={coin_var:"crypto",coin_fixed:"",amount_var:"amount",fiat_to_usd:1.0,use_qr:true,request_id_var:"request_id"};
-    if(t==="list"){ if(!p.source) p.source="products"; if(!p.city) p.city="tbilisi"; if(!p.item_var) p.item_var="product"; if(!p.item_target) p.item_target=""; }
-    renderEditor(); renderPreview();
+// ══ page / action helpers ═══════════════════════════════════════════════
+const P = id => cfg.pages[id];
+const pname = id => (cfg.pages[id] && (cfg.pages[id].title || id)) || id;
+const ML = (obj, lang = editLang) => (obj && (obj[lang] ?? '')) || '';
+function firstText(obj) { return obj[editLang] || obj[cfg.default_lang] || Object.values(obj).find(Boolean) || ''; }
+function slug(s) { return (s || 'screen').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'screen'; }
+function uniqueId(base) { base = slug(base); let id = base, n = 2; while (cfg.pages[id]) id = base.slice(0, 36) + '_' + n++; return id; }
+
+function parseAction(a) {
+  a = a || 'noop';
+  if (a.startsWith('page:')) return {kind: 'page', target: a.slice(5)};
+  if (a.startsWith('url:')) return {kind: 'url', url: a.slice(4)};
+  if (a.startsWith('choose:')) { const p = a.split(':'); return {kind: 'choose', var: p[1] || '', value: p[2] || '', target: p.slice(3).join(':')}; }
+  if (a.startsWith('confirm:')) return {kind: 'confirm', target: a.slice(8)};
+  if (a.startsWith('setlang:')) { const p = a.split(':'); return {kind: 'setlang', lang: p[1] || '', target: p[2] || ''}; }
+  if (a.startsWith('buy:')) { const p = a.split(':'); return {kind: 'buy', target: p[1] || '', low: p[2] || ''}; }
+  if (a.startsWith('builtin:')) return {kind: 'builtin', key: a.slice(8)};
+  if (a === 'admin') return {kind: 'admin'};
+  return {kind: 'noop'};
 }
-function setL(k,v){ config.pages[currentPage][k]=v; renderPreview(); }
-function toggleIL(on){
-    const p=config.pages[currentPage];
-    if(on) p.item_lookup={source:"products",var:"product",city:"tbilisi"};
-    else delete p.item_lookup;
-    renderTypeConfig();
+function buildAction(o) {
+  switch (o.kind) {
+    case 'page': return 'page:' + (o.target || '');
+    case 'url': return 'url:' + (o.url || '');
+    case 'choose': return `choose:${o.var || ''}:${o.value || ''}:${o.target || ''}`;
+    case 'confirm': return 'confirm:' + (o.target || '');
+    case 'setlang': return 'setlang:' + (o.lang || '') + (o.target ? ':' + o.target : '');
+    case 'buy': return 'buy:' + (o.target || '') + (o.low ? ':' + o.low : '');
+    case 'builtin': return 'builtin:' + (o.key || 'products');
+    case 'admin': return 'admin';
+    default: return 'noop';
+  }
 }
-function setIL(k,v){ const p=config.pages[currentPage]; if(!p.item_lookup)p.item_lookup={source:"products",var:"product",city:"tbilisi"}; p.item_lookup[k]=v; }
-function setInp(k,v){
-    const inp = config.pages[currentPage].input;
-    if(k==='min'||k==='max') inp[k] = v===''? null : Number(v);
-    else inp[k]=v;
-    if(k==='kind') renderTypeConfig();
-    renderPreview();
+function actionTarget(a) { const o = parseAction(a); return ['page', 'choose', 'confirm', 'buy', 'setlang'].includes(o.kind) ? o.target : null; }
+function actionSummary(a) {
+  const o = parseAction(a);
+  switch (o.kind) {
+    case 'page': return '→ ' + (o.target ? pname(o.target) : '(pick a screen)');
+    case 'url': return '🔗 ' + (o.url || '(link)');
+    case 'choose': return `${o.var}=${o.value === '@' ? 'button text' : o.value} → ${o.target ? pname(o.target) : '?'}`;
+    case 'confirm': return '“I paid” → ' + (o.target ? pname(o.target) : '?');
+    case 'setlang': return '🌐 language ' + (o.lang || '?').toUpperCase() + ' → ' + (o.target ? pname(o.target) : 'start screen');
+    case 'buy': return '🛒 buy with balance → ' + (o.target ? pname(o.target) : '?');
+    case 'builtin': return BUILTINS[o.key] || o.key;
+    case 'admin': return 'Admin panel';
+    default: return 'does nothing';
+  }
 }
-function setInpErr(v){ const inp=config.pages[currentPage].input; ensureObj(inp,'error'); inp.error[currentLang]=v; }
-function setRc(k,v){
-    const rc = config.pages[currentPage].receipt;
-    if(k==='fiat_to_usd') rc[k]=Number(v)||0;
-    else rc[k]=v;
-    renderPreview();
+const enabledCoins = () => ((cfg.payments && cfg.payments.coins) || DEFAULT_COINS).filter(c => c.enabled !== false);
+
+// ══ canvas ══════════════════════════════════════════════════════════════
+const NODE_W = 230;
+function autoPosition(onlyMissing = true) {
+  const start = cfg.start_page, depth = {}, q = [start]; depth[start] = 0;
+  while (q.length) {
+    const id = q.shift(), p = P(id); if (!p) continue;
+    const next = [];
+    p.rows.flat().forEach(b => { const t = actionTarget(b.action); if (t) next.push(t); });
+    if (p.input && p.input.next) next.push(p.input.next);
+    if (p.item_target) next.push(p.item_target);
+    next.forEach(t => { if (P(t) && depth[t] === undefined) { depth[t] = depth[id] + 1; q.push(t); } });
+  }
+  const extra = Math.max(0, ...Object.values(depth)) + 1;
+  Object.keys(cfg.pages).forEach(id => { if (depth[id] === undefined) depth[id] = extra; });
+  const cols = {};
+  Object.keys(cfg.pages).forEach(id => (cols[depth[id]] = cols[depth[id]] || []).push(id));
+  for (const [d, ids] of Object.entries(cols)) ids.forEach((id, i) => {
+    if (onlyMissing && cfg._layout[id]) return;
+    cfg._layout[id] = [60 + d * 320, 60 + i * 230];
+  });
 }
 
-function renderRows(){
-    const page = config.pages[currentPage];
-    const box = document.getElementById("rowsBox");
-    box.innerHTML = "";
-    page.rows.forEach((row, ri)=>{
-        const rb = document.createElement("div");
-        rb.className = "cx-row-box";
-        let btns = "";
-        row.forEach((btn, bi)=>{
-            btns += buttonCardHTML(btn, ri, bi, row.length);
-        });
-        rb.innerHTML = `
-          <div class="cx-row-head">
-            <span class="lbl">Row ${ri+1}</span>
-            <span>
-              <button class="cx-mini" onclick="moveRow(${ri},-1)" ${ri===0?"disabled":""}>↑</button>
-              <button class="cx-mini" onclick="moveRow(${ri},1)" ${ri===page.rows.length-1?"disabled":""}>↓</button>
-              <button class="cx-mini" onclick="addButton(${ri})">+ Button</button>
-              <button class="cx-mini" style="color:var(--red)" onclick="deleteRow(${ri})">✕ Row</button>
-            </span>
-          </div>
-          ${btns || '<div class="cx-help">empty row</div>'}
-        `;
-        box.appendChild(rb);
+function renderCanvas() {
+  const nodes = $('#nodes'); nodes.replaceChildren();
+  const issues = computeIssues(); const warnIds = new Set(issues.filter(i => i.page).map(i => i.page));
+  for (const [id, p] of Object.entries(cfg.pages)) {
+    const pos = cfg._layout[id] || [60, 60];
+    const info = TYPE_INFO[p.type] || TYPE_INFO.message;
+    const chips = [];
+    p.rows.forEach((row, ri) => row.forEach((b, bi) => {
+      chips.push(h('div', {class: 'chip' + (bi === 0 && ri > 0 ? ' rowmark' : ''), 'data-r': ri, 'data-b': bi, title: actionSummary(b.action),
+        onclick: ev => { ev.stopPropagation(); selectPage(id); selBtn = [ri, bi]; renderInspector(); },},
+        (b.label[editLang] || b.label[cfg.default_lang] || '(no label)'),
+        h('span', {class: 'port', title: 'Drag to a screen to connect', onpointerdown: ev => startConnect(ev, id, ri, bi)})));
+    }));
+    nodes.append(h('div', {class: 'node' + (sel === id ? ' sel' : '') + (warnIds.has(id) ? ' warn' : ''), 'data-id': id, style: `left:${pos[0]}px;top:${pos[1]}px`,
+      onpointerdown: ev => { if (ev.target.closest('.chip')) return; selectPage(id); }},
+      h('div', {class: 'nh', onpointerdown: ev => startDrag(ev, id)},
+        h('span', {class: 'ic'}, info.ic), h('span', {class: 'nt'}, pname(id)), cfg.start_page === id ? h('span', {class: 'st'}, 'START') : null),
+      h('div', {class: 'nb'}, stripTags(firstText(p.text)) || (p.type === 'list' ? 'Lists items from the shop' : '(no text)')),
+      chips.length ? h('div', {class: 'chips'}, chips) : h('div', {class: 'nempty'}, 'No buttons')));
+  }
+  applyView(); drawEdges();
+}
+const stripTags = s => String(s || '').replace(/<[^>]+>/g, '').slice(0, 90);
+
+function drawEdges(temp) {
+  const svg = $('#edges'); svg.replaceChildren();
+  const ns = 'http://www.w3.org/2000/svg';
+  const mk = (d, cls) => { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); p.setAttribute('class', 'edge ' + cls); svg.append(p); return p; };
+  const curve = (x1, y1, x2, y2) => { const dx = Math.max(60, Math.abs(x2 - x1) / 2); return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`; };
+  const nodeEl = id => $(`.node[data-id="${id}"]`);
+  const tgtPt = id => { const el = nodeEl(id); return el ? [el.offsetLeft, el.offsetTop + 18] : null; };
+  for (const [id, p] of Object.entries(cfg.pages)) {
+    const el = nodeEl(id); if (!el) continue;
+    p.rows.forEach((row, ri) => row.forEach((b, bi) => {
+      const o = parseAction(b.action); const t = ['page', 'choose', 'confirm', 'buy', 'setlang'].includes(o.kind) ? o.target : null;
+      if (o.kind === 'buy' && o.low && P(o.low)) { const chip0 = el.querySelector(`.chip[data-r="${ri}"][data-b="${bi}"]`), z0 = tgtPt(o.low); if (chip0 && z0) mk(curve(el.offsetLeft + el.offsetWidth, el.offsetTop + chip0.offsetTop + chip0.offsetHeight / 2, z0[0], z0[1]), 'flow'); }
+      if (!t || !P(t)) return;
+      const chip = el.querySelector(`.chip[data-r="${ri}"][data-b="${bi}"]`); if (!chip) return;
+      const a = [el.offsetLeft + el.offsetWidth, el.offsetTop + chip.offsetTop + chip.offsetHeight / 2], z = tgtPt(t);
+      if (!z) return;
+      const pth = mk(curve(a[0], a[1], z[0], z[1]), o.kind === 'choose' ? 'choose' : (o.kind === 'confirm' || o.kind === 'buy') ? 'confirm' : 'page');
+      if (z[0] <= el.offsetLeft) pth.classList.add('back');     // links back to an earlier screen: keep them quiet
+      if (sel === id || t === sel) pth.classList.add('hot');
+    }));
+    [p.input && p.input.next, p.item_target].filter(Boolean).forEach(t => {
+      const z = P(t) && tgtPt(t); if (z) mk(curve(el.offsetLeft + el.offsetWidth, el.offsetTop + 18, z[0], z[1]), 'flow');
     });
+  }
+  if (temp) mk(curve(temp[0], temp[1], temp[2], temp[3]), 'page hot');
 }
 
-function buttonCardHTML(btn, ri, bi, rowLen){
-    const a = parseAction(btn.action);
-    const pageOpts = (sel)=> Object.keys(config.pages).map(p=>
-        `<option value="${esc(p)}" ${sel===p?"selected":""}>${esc(p)}</option>`).join("");
-    let target = "";
-    if(a.type==="page"){
-        target = `<select class="cx-input" onchange="setAction(${ri},${bi},'page',this.value)">${pageOpts(a.page)}</select>`;
-    } else if(a.type==="builtin"){
-        let opts = BUILTINS.map(b=>`<option value="${b.key}" ${a.value===b.key?"selected":""}>${b.label}</option>`).join("");
-        target = `<select class="cx-input" onchange="setAction(${ri},${bi},'builtin',this.value)">${opts}</select>`;
-    } else if(a.type==="url"){
-        target = `<input class="cx-input" style="flex:1" value="${esc(a.url)}" placeholder="https://..."
-                    oninput="setAction(${ri},${bi},'url',this.value)">`;
-    } else if(a.type==="confirm"){
-        target = `<select class="cx-input" onchange="setConfirm(${ri},${bi},this.value)">${pageOpts(a.page)}</select>`;
-    } else if(a.type==="choose"){
-        target = `<input class="cx-input" style="width:90px" value="${esc(a.var)}" placeholder="var" oninput="setChoose(${ri},${bi},'var',this.value)">
-                  <input class="cx-input" style="width:90px" value="${esc(a.value)}" placeholder="value" oninput="setChoose(${ri},${bi},'value',this.value)">
-                  <select class="cx-input" onchange="setChoose(${ri},${bi},'page',this.value)">${pageOpts(a.page)}</select>`;
+function applyView() { $('#world').style.transform = `translate(${view.x}px,${view.y}px) scale(${view.s})`; }
+function toWorld(cx, cy) { const r = $('#canvasWrap').getBoundingClientRect(); return [(cx - r.left - view.x) / view.s, (cy - r.top - view.y) / view.s]; }
+
+function startDrag(ev, id) {
+  if (ev.button !== 0) return; ev.preventDefault(); selectPage(id);
+  const start = [ev.clientX, ev.clientY], orig = [...(cfg._layout[id] || [0, 0])];
+  let moved = false;
+  const mv = e => {
+    const dx = (e.clientX - start[0]) / view.s, dy = (e.clientY - start[1]) / view.s;
+    if (!moved && Math.hypot(dx, dy) < 3) return;
+    if (!moved) { moved = true; snapshot(); }
+    cfg._layout[id] = [Math.round(orig[0] + dx), Math.round(orig[1] + dy)];
+    const el = $(`.node[data-id="${id}"]`); el.style.left = cfg._layout[id][0] + 'px'; el.style.top = cfg._layout[id][1] + 'px'; drawEdges();
+  };
+  const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); if (moved) touched(); };
+  addEventListener('pointermove', mv); addEventListener('pointerup', up);
+}
+
+function startConnect(ev, id, ri, bi) {
+  ev.preventDefault(); ev.stopPropagation(); if (ev.button !== 0) return;
+  const el = $(`.node[data-id="${id}"]`), chip = el.querySelector(`.chip[data-r="${ri}"][data-b="${bi}"]`);
+  const a = [el.offsetLeft + el.offsetWidth, el.offsetTop + chip.offsetTop + chip.offsetHeight / 2];
+  const mv = e => {
+    const w = toWorld(e.clientX, e.clientY); drawEdges([a[0], a[1], w[0], w[1]]);
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('dropok'));
+    const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.node'); if (t && t.dataset.id !== id) t.classList.add('dropok');
+  };
+  const up = e => {
+    removeEventListener('pointermove', mv); removeEventListener('pointerup', up);
+    const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.node');
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('dropok'));
+    if (t && t.dataset.id) {
+      snapshot(); const b = P(id).rows[ri][bi], o = parseAction(b.action);
+      if (o.kind === 'choose' || o.kind === 'confirm' || o.kind === 'buy' || o.kind === 'setlang') o.target = t.dataset.id; else { o.kind = 'page'; o.target = t.dataset.id; }
+      b.action = buildAction(o); toast(`Connected to “${pname(t.dataset.id)}”`, 'ok');
     }
-    const style = btn.style || "";
-    return `
-      <div class="cx-btn-card">
-        <div class="cx-line">
-          <input class="cx-input" style="flex:1" placeholder="Button label (${currentLang.toUpperCase()})"
-                 value="${esc(pickText(btn.label, currentLang))}"
-                 oninput="setLabel(${ri},${bi},this.value)">
-          <select class="cx-input" title="color cue" onchange="setStyle(${ri},${bi},this.value)">
-            <option value="" ${style===""?"selected":""}>⚪</option>
-            <option value="green" ${style==="green"?"selected":""}>🟢</option>
-            <option value="red" ${style==="red"?"selected":""}>🔴</option>
-            <option value="check" ${style==="check"?"selected":""}>✅</option>
-            <option value="cross" ${style==="cross"?"selected":""}>❌</option>
-          </select>
-        </div>
-        <div class="cx-line">
-          <select class="cx-input" onchange="setActionType(${ri},${bi},this.value)">
-            <option value="page"    ${a.type==="page"?"selected":""}>→ Page</option>
-            <option value="choose"  ${a.type==="choose"?"selected":""}>☑ Set var + go</option>
-            <option value="confirm" ${a.type==="confirm"?"selected":""}>💸 I-paid + go</option>
-            <option value="builtin" ${a.type==="builtin"?"selected":""}>⚙ Builtin</option>
-            <option value="url"     ${a.type==="url"?"selected":""}>🔗 URL</option>
-            <option value="noop"    ${a.type==="noop"?"selected":""}>∅ None</option>
-          </select>
-          ${target}
-        </div>
-        <div class="cx-line">
-          <button class="cx-mini" onclick="moveBtnH(${ri},${bi},-1)" ${bi===0?"disabled":""}>←</button>
-          <button class="cx-mini" onclick="moveBtnH(${ri},${bi},1)" ${bi===rowLen-1?"disabled":""}>→</button>
-          <button class="cx-mini" onclick="moveBtnV(${ri},${bi},-1)">⬆ row</button>
-          <button class="cx-mini" onclick="moveBtnV(${ri},${bi},1)">⬇ row</button>
-          <button class="cx-mini" style="color:var(--red)" onclick="deleteButton(${ri},${bi})">✕</button>
-        </div>
-      </div>`;
+    sel = null; selectPage(id); selBtn = [ri, bi]; touched({inspector: true});
+  };
+  addEventListener('pointermove', mv); addEventListener('pointerup', up);
 }
 
-/* ── preview ── */
-function renderPreview(){
-    const page = config.pages[currentPage];
-    const el = document.getElementById("preview");
-    const cap = renderVars(pickText(page.text, currentLang));
-    let kb = "";
-    page.rows.forEach(row=>{
-        let keys = "";
-        row.forEach(btn=>{ const pre=STYLE_EMOJI[btn.style]||""; keys += `<div class="tg-key">${esc(pre+(pickText(btn.label, currentLang) || "·"))}</div>`; });
-        if(keys) kb += `<div class="tg-kb-row">${keys}</div>`;
+function setupCanvasEvents() {
+  const wrap = $('#canvasWrap');
+  wrap.addEventListener('pointerdown', ev => {
+    if (ev.target.closest('.node,.tools,.zoom,#phone')) return;
+    ev.preventDefault(); const s = [ev.clientX, ev.clientY, view.x, view.y];
+    wrap.style.cursor = 'grabbing';
+    const mv = e => { view.x = s[2] + e.clientX - s[0]; view.y = s[3] + e.clientY - s[1]; applyView(); };
+    const up = () => { wrap.style.cursor = ''; removeEventListener('pointermove', mv); removeEventListener('pointerup', up); };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up);
+  });
+  wrap.addEventListener('wheel', ev => {
+    ev.preventDefault(); const r = wrap.getBoundingClientRect();
+    const ns = Math.min(1.8, Math.max(0.3, view.s * (ev.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    view.x = mx - (mx - view.x) * (ns / view.s); view.y = my - (my - view.y) * (ns / view.s); view.s = ns; applyView();
+  }, {passive: false});
+  $('#zIn').onclick = () => { view.s = Math.min(1.8, view.s * 1.2); applyView(); };
+  $('#zOut').onclick = () => { view.s = Math.max(0.3, view.s / 1.2); applyView(); };
+  $('#fitBtn').onclick = fitView;
+  $('#addFlow').onclick = openFlowModal;
+  $('#autoLayout').onclick = () => { snapshot(); autoPosition(false); touched(); fitView(); };
+  $('#addScreen').onclick = () => addScreen();
+}
+function fitView() {
+  const ids = Object.keys(cfg.pages); if (!ids.length) return;
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+  ids.forEach(id => { const p = cfg._layout[id] || [0, 0], el = $(`.node[data-id="${id}"]`); x1 = Math.min(x1, p[0]); y1 = Math.min(y1, p[1]); x2 = Math.max(x2, p[0] + NODE_W); y2 = Math.max(y2, p[1] + (el ? el.offsetHeight : 160)); });
+  const r = $('#canvasWrap').getBoundingClientRect(), pad = 60;
+  const s = Math.min(1.1, Math.max(0.3, Math.min((r.width - pad * 2) / (x2 - x1), (r.height - pad * 2) / (y2 - y1))));
+  view.s = s; view.x = (r.width - (x2 - x1) * s) / 2 - x1 * s; view.y = (r.height - (y2 - y1) * s) / 2 - y1 * s; applyView();
+}
+function centerOn(id) {
+  const p = cfg._layout[id]; if (!p) return; const r = $('#canvasWrap').getBoundingClientRect();
+  view.x = r.width / 2 - (p[0] + NODE_W / 2) * view.s; view.y = r.height / 3 - p[1] * view.s; applyView();
+}
+
+function selectPage(id) {
+  if (sel === id) return;
+  sel = id; selBtn = null; pv.page = id; pv.history = [];
+  renderCanvas(); renderInspector(); renderPreview();
+}
+
+function addScreen(opts = {}) {
+  snapshot(); const title = opts.title || 'New screen', id = uniqueId(opts.id || title), dl = cfg.default_lang;
+  cfg.pages[id] = {title, type: opts.type || 'message', image: '', parse_mode: 'HTML', show_admin_button: false,
+    text: {[dl]: opts.text || ''}, rows: opts.back ? [[{label: {[dl]: '⬅️ Back'}, action: 'page:' + opts.back}]] : []};
+  const from = opts.near && cfg._layout[opts.near], r = $('#canvasWrap').getBoundingClientRect();
+  cfg._layout[id] = from ? [from[0] + 320, from[1] + (Object.keys(cfg.pages).length % 3) * 60] : toWorld(r.left + 300, r.top + 160).map(Math.round);
+  sel = null; selectPage(id); touched({inspector: true}); return id;
+}
+
+// ══ inspector ═══════════════════════════════════════════════════════════
+function field(label, ctl, hint) { return h('div', {}, h('label', {class: 'f'}, label), ctl, hint ? h('div', {class: 'hint'}, hint) : null); }
+function section(title) { return h('h3', {}, title, h('span', {class: 'ln'})); }
+function inp(value, onInput, attrs = {}) { return h('input', Object.assign({value: value ?? '', oninput: ev => onInput(ev.target.value)}, attrs)); }
+function sel_(options, value, onChange, attrs = {}) {
+  const s = h('select', Object.assign({onchange: ev => onChange(ev.target.value)}, attrs),
+    options.map(([v, t]) => h('option', {value: v, selected: v === value}, t)));
+  s.value = value; return s;
+}
+function screenOptions(includeNone = false) { const o = Object.keys(cfg.pages).map(id => [id, pname(id)]); return includeNone ? [['', '— none —'], ...o] : o; }
+function edit(fn, opts = {}) { snapshot(opts.key); fn(); touched(opts); }
+
+function allVarNames(p) {
+  const v = new Set(['balance', 'user_id', 'bot_username', 'referrals', 'earned', 'cities', 'products_count', 'purchase_count', 'purchase_total', 'city_name', 'category_name', 'product_name', 'product_price', 'district_name', 'shortage', 'ref_link', 'ref_percent']);
+  enabledCoins().forEach(c => { v.add(c.code + '_price'); v.add(c.code + '_amount'); });
+  if (p.item_lookup || p.type === 'receipt') ['name', 'description', 'price'].forEach(x => v.add(x));
+  if (p.type === 'history') ['purchases', 'purchase_count', 'purchase_total'].forEach(x => v.add(x));
+  if (p.type === 'receipt') ['coin', 'wallet', 'crypto_amount', 'crypto_price', 'usd_amount', 'amount', 'request_id'].forEach(x => v.add(x));
+  for (const q of Object.values(cfg.pages)) {
+    if (q.input && q.input.var) v.add(q.input.var);
+    if (q.item_var) v.add(q.item_var);
+    q.rows.flat().forEach(b => { const o = parseAction(b.action); if (o.kind === 'choose' && o.var) v.add(o.var); });
+    if (q.on_enter && q.on_enter.set_vars) Object.keys(q.on_enter.set_vars).forEach(x => v.add(x));
+  }
+  return [...v];
+}
+
+function textArea(obj, p, opts = {}) {
+  const key = 'tx' + (opts.key || '');
+  const ta = h('textarea', {placeholder: opts.placeholder || 'Write the message users will see…', style: opts.small ? 'min-height:60px' : '',
+    oninput: ev => { snapshot(key + sel + editLang); obj[editLang] = ev.target.value; touched(); }});
+  ta.value = obj[editLang] || '';
+  const mode = p.parse_mode || '';
+  const wrap = (a, b) => () => {
+    const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+    ta.value = v.slice(0, s) + a + v.slice(s, e) + b + v.slice(e); ta.focus(); ta.setSelectionRange(s + a.length, e + a.length); ta.dispatchEvent(new Event('input'));
+  };
+  const fmt = mode === 'HTML' ? [['B', '<b>', '</b>'], ['I', '<i>', '</i>'], ['U', '<u>', '</u>'], ['S', '<s>', '</s>'], ['Code', '<code>', '</code>']]
+    : mode === 'Markdown' ? [['B', '*', '*'], ['I', '_', '_'], ['Code', '`', '`']] : [];
+  const bar = h('div', {class: 'fmtbar'}, fmt.map(([t, a, b]) => h('button', {class: 'ghost', title: 'Format selected text', onclick: wrap(a, b)}, t)),
+    mode === 'HTML' ? h('button', {class: 'ghost', onclick: () => { const u = prompt('Link address (https://…)'); if (u) wrap(`<a href="${u.replace(/"/g, '')}">`, '</a>')(); }}, '🔗 Link') : null,
+    (() => { const s = h('select', {style: 'width:auto;padding:3px 6px;font-size:12px', onchange: ev => { if (!ev.target.value) return; wrap('{' + ev.target.value + '}', '')(); ev.target.value = ''; }},
+      h('option', {value: ''}, '{ } Insert value…'), allVarNames(p).map(v => h('option', {value: v}, '{' + v + '}'))); return s; })());
+  return h('div', {}, bar, ta);
+}
+
+function renderInspector() {
+  const root = $('#side'); const scroll = root.scrollTop; root.replaceChildren();
+  if (!sel || !P(sel)) {
+    root.append(h('div', {class: 'empty'}, h('div', {style: 'font-size:40px;margin-bottom:10px'}, '🧩'),
+      h('b', {}, 'Pick a screen to edit it'), h('div', {}, 'Click any box on the canvas, or create a new screen.'), h('br'),
+      h('button', {class: 'primary', onclick: () => addScreen()}, '＋ New screen'),
+      h('div', {class: 'hint', style: 'margin-top:22px'}, 'Every box is one message your bot can show. Buttons on a screen lead to other screens — draw a line from a button’s dot to connect them.')));
+    return;
+  }
+  const id = sel, p = P(id);
+  // header
+  root.append(
+    h('div', {class: 'row'}, h('div', {class: 'grow'}, inp(p.title || '', v => { snapshot('title' + id); p.title = v; touched(); }, {placeholder: 'Screen name (only you see this)', style: 'font-weight:600;font-size:15px'})),
+      h('button', {title: 'Duplicate this screen', onclick: () => duplicateScreen(id)}, '⧉'),
+      h('button', {class: 'danger', title: 'Delete this screen', onclick: () => deleteScreen(id)}, '🗑')),
+    h('div', {class: 'row', style: 'margin-top:8px'},
+      cfg.start_page === id ? h('span', {class: 'tag g'}, '★ Start screen — shown on /start') : h('button', {onclick: () => edit(() => { cfg.start_page = id; }, {inspector: true})}, '★ Make this the start screen'),
+      h('span', {class: 'tag', title: 'Internal id'}, id)));
+
+  // type
+  root.append(section('What kind of screen'), h('div', {class: 'seg'}, Object.entries(TYPE_INFO).map(([t, i]) =>
+    h('div', {class: 'opt' + (p.type === t ? ' on' : ''), onclick: () => edit(() => setType(p, t), {inspector: true})}, h('b', {}, i.ic + ' ' + i.name), h('span', {}, i.sub)))));
+
+  // text
+  root.append(section(`Message text · ${LANG_NAMES[editLang] || editLang}`), textArea(p.text, p));
+  if (cfg.langs.length > 1) {
+    const miss = cfg.langs.filter(l => !(p.text[l] || '').trim());
+    if (miss.length) root.append(h('div', {class: 'hint'}, 'Missing translation: ', miss.map(l => h('a', {href: '#', style: 'color:var(--yellow);margin-right:6px', onclick: ev => { ev.preventDefault(); setEditLang(l); }}, LANG_NAMES[l] || l))));
+  }
+
+  // image
+  root.append(section('Picture, GIF or video'), h('div', {class: 'row'},
+    p.image ? mediaEl(p.image, {style: 'width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)', onerror: ev => ev.target.style.display = 'none'}) : h('div', {class: 'mut'}, 'Nothing attached'),
+    h('div', {class: 'grow mut', style: 'font-size:12px;overflow:hidden;text-overflow:ellipsis'}, p.image ? mediaKind(p.image) + ' · ' + p.image : ''),
+    h('button', {onclick: () => openImagePicker(p.image, name => edit(() => { p.image = name; }, {inspector: true}))}, p.image ? 'Change' : 'Choose…'),
+    p.image ? h('button', {class: 'ghost', onclick: () => edit(() => { p.image = ''; }, {inspector: true})}, '✕') : null));
+  root.append(field('Which picture to show', sel_([['', 'This screen’s own picture'], ['district', 'The picture of the district the user picked']], p.image_from || '', v => edit(() => { if (v) p.image_from = v; else delete p.image_from; }, {inspector: true}))),
+    p.image_from === 'district' ? h('div', {class: 'hint'}, 'Shows the picture attached to the district the user chose earlier; the picture above is used when that district has none. Attach district pictures in Settings → District pictures, Global Admin or the bot’s admin menu.' + (p.type === 'receipt' ? ' On a payment screen the district picture replaces the QR code.' : '')) : null);
+  if (p.type === 'receipt') root.append(h('div', {class: 'hint'}, 'Payment screens show the wallet QR code instead of a picture.'));
+  else if (p.image && !/\.(jpe?g|png|webp)$/i.test(p.image)) root.append(h('div', {class: 'hint'}, 'GIFs play automatically in the chat. Videos must be MP4 (H.264) to play inline in Telegram.'));
+
+  // buttons
+  root.append(section('Buttons'), renderButtonsEditor(id, p));
+
+  // type specific
+  if (p.type === 'input') root.append(section('Input settings'), inputSettings(p));
+  if (p.type === 'list') root.append(section('Item list settings'), listSettings(p));
+  if (p.type === 'receipt') root.append(section('Payment settings'), receiptSettings(p));
+  if (p.type === 'history') root.append(section('Purchase history settings'), historySettings(p));
+
+  // automation
+  root.append(section('Automation'), automation(p));
+
+  // advanced
+  const adv = h('details', {class: 'adv'}, h('summary', {}, 'Advanced'));
+  adv.append(field('Text formatting', sel_([['HTML', 'HTML (bold, italic, links…)'], ['Markdown', 'Markdown'], ['', 'Plain text']], p.parse_mode || '', v => edit(() => { p.parse_mode = v; }, {inspector: true}))),
+    h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: !!p.show_admin_button, onchange: ev => edit(() => { p.show_admin_button = ev.target.checked; })}), 'Show “⚙ Admin panel” button to admins'));
+  if (p.type !== 'list') {
+    const il = p.item_lookup;
+    adv.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: !!il, onchange: ev => edit(() => { if (ev.target.checked) p.item_lookup = {source: 'products', city: 'tbilisi', var: 'product'}; else delete p.item_lookup; }, {inspector: true})}), 'Show details of the item the user picked (use {name} {price} {description})'));
+    if (il) adv.append(h('div', {class: 'card'},
+      field('Item type', sel_([['products', 'Product'], ['districts', 'District']], il.source, v => edit(() => { il.source = v; }))),
+      field('Picked in variable', inp(il.var, v => edit(() => { il.var = v.replace(/[^a-zA-Z0-9_]/g, ''); }, {key: 'ilv'})), 'Must match the “variable” of the item-list screen the user came from.'),
+      field('City', inp(il.city, v => edit(() => { il.city = v.replace(/[^a-zA-Z0-9_]/g, ''); }, {key: 'ilc'})))));
+  }
+  root.append(adv);
+  root.scrollTop = scroll;
+}
+
+function setType(p, t) {
+  p.type = t;
+  if (t === 'input' && !p.input) p.input = {var: 'amount', kind: 'number', min: 1, max: 1000, regex: '', error: {[cfg.default_lang]: '❌ Invalid value, try again.'}, next: ''};
+  if (t === 'list' && !p.source) { p.source = 'products'; p.city = 'tbilisi'; p.item_var = 'product'; p.item_target = ''; }
+  if (t === 'history' && !p.history) { p.history = {limit: 10, line: {}, empty: {}}; if (!Object.values(p.text).some(v => (v || '').trim())) p.text = {[cfg.default_lang]: '🧾 <b>Your purchases</b>\n\n{purchases}'}; else for (const l of Object.keys(p.text)) if ((p.text[l] || '').trim() && !p.text[l].includes('{purchases}')) p.text[l] += '\n\n{purchases}'; }
+  if (t === 'receipt' && !p.receipt) p.receipt = {coin_var: 'crypto', coin_fixed: '', amount_var: 'amount', fiat_to_usd: 1.0, use_qr: true, request_id_var: 'request_id'};
+}
+
+// ── buttons ───────────────────────────────────────────────────────────────
+function renderButtonsEditor(id, p) {
+  const box = h('div', {});
+  if (!p.rows.length) box.append(h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'No buttons yet. Buttons sit under the message; each can open another screen, a link and more.'));
+  p.rows.forEach((row, ri) => {
+    box.append(h('div', {class: 'rowbox'},
+      h('div', {class: 'rowhead'}, h('span', {}, `Row ${ri + 1}`),
+        h('span', {}, h('button', {class: 'ghost', title: 'Move row up', disabled: ri === 0, onclick: () => edit(() => { [p.rows[ri - 1], p.rows[ri]] = [p.rows[ri], p.rows[ri - 1]]; selBtn = null; }, {inspector: true})}, '↑'),
+          h('button', {class: 'ghost', title: 'Move row down', disabled: ri === p.rows.length - 1, onclick: () => edit(() => { [p.rows[ri + 1], p.rows[ri]] = [p.rows[ri], p.rows[ri + 1]]; selBtn = null; }, {inspector: true})}, '↓'))),
+      h('div', {class: 'btnline'}, row.map((b, bi) => h('div', {class: 'bchip' + (selBtn && selBtn[0] === ri && selBtn[1] === bi ? ' on' : ''), onclick: () => { selBtn = selBtn && selBtn[0] === ri && selBtn[1] === bi ? null : [ri, bi]; renderInspector(); }},
+          h('span', {class: 'tx', title: actionSummary(b.action)}, b.label[editLang] || b.label[cfg.default_lang] || '(no label)'),
+          h('button', {class: 'x', title: 'Delete button', onclick: ev => { ev.stopPropagation(); edit(() => { row.splice(bi, 1); if (!row.length) p.rows.splice(ri, 1); selBtn = null; }, {inspector: true}); }}, '✕'))),
+        h('button', {class: 'ghost', style: 'padding:4px 8px', title: 'Add a button next to these', disabled: row.length >= 4, onclick: () => edit(() => { row.push(newButton()); selBtn = [ri, row.length - 1]; }, {inspector: true})}, '＋')),
+      selBtn && selBtn[0] === ri ? buttonEditor(id, p, ri, selBtn[1]) : null));
+  });
+  box.append(h('div', {class: 'row', style: 'flex-wrap:wrap'},
+    h('button', {onclick: () => edit(() => { p.rows.push([newButton()]); selBtn = [p.rows.length - 1, 0]; }, {inspector: true})}, '＋ Add button row'),
+    h('button', {title: 'One button per payment coin', onclick: () => coinButtonsDialog(id)}, '💱 Coin buttons'),
+    h('button', {title: 'Add a button that goes back', onclick: () => backButtonDialog(id)}, '⬅️ Back button')));
+  return box;
+}
+function newButton() { return {label: {[cfg.default_lang]: 'New button'}, action: 'noop'}; }
+
+function buttonEditor(id, p, ri, bi) {
+  const b = p.rows[ri] && p.rows[ri][bi]; if (!b) return null;
+  const o = parseAction(b.action);
+  const setAct = (patch) => edit(() => { b.action = buildAction(Object.assign(parseAction(b.action), patch)); }, {inspector: patch.kind !== undefined || patch.target !== undefined, key: 'act' + id + ri + bi});
+  const targetSel = () => {
+    const s = sel_([['', '— choose a screen —'], ...screenOptions(), ['__new', '＋ Create a new screen…']], o.target || '', v => {
+      if (v === '__new') { const t = prompt('Name of the new screen', 'New screen'); if (!t) { renderInspector(); return; }
+        edit(() => { const nid = uniqueId(t); cfg.pages[nid] = {title: t, type: 'message', image: '', parse_mode: 'HTML', show_admin_button: false, text: {[cfg.default_lang]: ''}, rows: [[{label: {[cfg.default_lang]: '⬅️ Back'}, action: 'page:' + id}]]};
+          const pos = cfg._layout[id] || [60, 60]; cfg._layout[nid] = [pos[0] + 320, pos[1] + 60]; b.action = buildAction(Object.assign(parseAction(b.action), {target: nid})); }, {inspector: true}); }
+      else setAct({target: v});
+    }); return s; };
+  const ed = h('div', {class: 'bed'});
+  ed.append(field(`Button label · ${LANG_NAMES[editLang] || editLang}`, inp(b.label[editLang] || '', v => { snapshot('bl' + id + ri + bi + editLang); b.label[editLang] = v; touched(); }, {placeholder: 'e.g. 🛍 Products'}),
+    cfg.langs.length > 1 && cfg.langs.some(l => !(b.label[l] || '').trim()) ? 'Some languages are empty — those users see the default language instead.' : null));
+  ed.append(h('div', {class: 'row', style: 'margin:-4px 0 8px;flex-wrap:wrap'}, h('span', {class: 'mut', style: 'font-size:12px'}, 'Show a live number on the button:'),
+    (() => { const s = h('select', {style: 'width:auto;max-width:100%;padding:3px 6px;font-size:12px', onchange: ev => { const k = ev.target.value; if (!k) return;
+        const coinKey = /^[A-Z0-9]{2,10}_(price|amount)$/.test(k);
+        edit(() => { b.label[editLang] = (b.label[editLang] || '').replace(/\s*(\(\{(cities|balance|purchase_count|products_count)[^}]*\}[^)]*\)|:\s*\{[A-Z0-9]{2,10}_(price|amount)\})\s*$/, '') + (coinKey ? ': {' + k + '}' : ' ({' + k + '})'); }, {inspector: true}); }},
+      h('option', {value: ''}, 'Add…'),
+      h('optgroup', {label: 'Numbers'}, h('option', {value: 'cities'}, '🏙 Number of cities, e.g. (1)'), h('option', {value: 'balance'}, '💵 User balance, e.g. (0.0)'),
+        h('option', {value: 'purchase_count'}, '🧾 Number of purchases, e.g. (0)'), h('option', {value: 'products_count'}, '🛍 Number of products')),
+      h('optgroup', {label: 'Converted price of the picked product'}, enabledCoins().map(c => h('option', {value: c.code + '_price'}, c.code + ': ' + c.label))),
+      h('optgroup', {label: 'Converted amount the user typed (top-up)'}, enabledCoins().map(c => h('option', {value: c.code + '_amount'}, c.code + ': ' + c.label)))); return s; })()),
+    h('div', {class: 'hint', style: 'margin:-4px 0 8px'}, 'Type {cities}, {balance}, {purchase_count} or {products_count} anywhere in a label. Cities counts the different cities your products/districts use (Tbilisi only → 1, Tbilisi + Batumi → 2). For crypto buttons use {BTC_price} (the picked product’s price converted to Bitcoin — works for every coin, e.g. {USDT_price}) or {BTC_amount} (the amount the user typed for a top-up). Add a currency yourself, e.g. {balance} ლ.'));
+  ed.append(field('When pressed', sel_([['page', '➜ Open a screen'], ['url', '🔗 Open a link'], ['choose', '☑ Remember a choice, then open a screen'], ['confirm', '💸 “I paid” — tell admins, then open a screen'], ['buy', '🛒 Buy the picked product with balance, then deliver it'], ['setlang', '🌐 Switch the language, then open a screen'],
+    ['builtin', '🧰 Built-in feature'], ['admin', '⚙ Open the admin panel (admins only)'], ['noop', '⛔ Do nothing']], o.kind, v => {
+    const n = {kind: v}; if (['page', 'choose', 'confirm', 'buy', 'setlang'].includes(v) && o.target) n.target = o.target; if (v === 'setlang') n.lang = o.lang || cfg.default_lang;
+    if (v === 'choose') { n.var = o.var || 'variant'; n.value = o.value || '@'; } if (v === 'builtin') n.key = 'balance'; if (v === 'url') n.url = 'https://';
+    b.action = 'noop'; edit(() => { b.action = buildAction(n); }, {inspector: true}); })));
+  if (['page', 'confirm', 'choose', 'buy', 'setlang'].includes(o.kind)) ed.append(field(o.kind === 'confirm' ? 'Then show' : o.kind === 'buy' ? 'After buying, show' : o.kind === 'setlang' ? 'Then open (empty = start screen)' : 'Screen to open', targetSel()));
+  if (o.kind === 'setlang') ed.append(field('Switch to language', sel_(cfg.langs.map(l => [l, (LANG_NAMES[l] || l) + ' (' + l + ')']), o.lang || cfg.default_lang, v => setAct({lang: v, kind: 'setlang'}))),
+    h('div', {class: 'hint'}, 'The user’s language is saved and every screen switches to it. Leave “Screen to open” empty to go back to the start screen. Add one such button per language to build a language picker — or use “🧩 Add a flow → Language picker”.'));
+  ed.append(field('Show this button', sel_([['', 'Always'], ['land', 'Only if the listing is sold as “მიწა უბანი / BURRIED IN DISTRICT”'], ['building', 'Only if the listing is sold as “კორპუსი / BUILDING”']], b.only_variant || '',
+    v => edit(() => { if (v) b.only_variant = v; else delete b.only_variant; }, {inspector: true}))),
+    h('div', {class: 'hint'}, 'Admins tick which variants each listing offers (Global Admin or the bot’s admin panel). Use this on the Variants screen’s buttons; the phone preview always shows them.'));
+  if (o.kind === 'buy') ed.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: !b.always, onchange: ev => edit(() => { if (ev.target.checked) delete b.always; else b.always = true; }, {inspector: true})}), 'Hide this button when the user’s balance is lower than the picked product’s price (recommended)'),
+    h('div', {class: 'hint'}, 'The bot checks the picked product’s price against the user’s balance each time the screen is shown. It is also hidden if no product was picked or the product is sold out. The phone preview always shows it.'));
+  if (o.kind === 'buy') ed.append(field('If the balance is too small', sel_([['', '— just show a popup “not enough balance” —'], ...screenOptions()], o.low || '', v => setAct({low: v, kind: 'buy'}))),
+    h('div', {class: 'hint'}, 'Charges the price of the product the user picked from their balance, records it in their purchase history and sends them the product’s delivery text and picture (set per product in Global Admin → Products, or in the bot’s admin menu). Use {balance} and {product_price} in the label, e.g. “💰 Pay with balance ({balance})”. On the “too small” screen {shortage} shows how much is missing — point it at your top-up screen.'));
+  if (o.kind === 'choose') {
+    const same = o.value === '@';
+    ed.append(field('Remember as', inp(o.var, v => setAct({var: v.replace(/[^a-zA-Z0-9_]/g, '')}), {placeholder: 'variant'})),
+      h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: same, onchange: ev => edit(() => { b.action = buildAction(Object.assign(parseAction(b.action), {value: ev.target.checked ? '@' : 'BTC'})); }, {inspector: true})}), 'Remember the button’s own text (recommended)'),
+      same ? h('div', {class: 'hint'}, `{${o.var || 'variant'}} will show exactly what this button says, in the user’s language — e.g. use it in a payment screen: “Variant: {${o.var || 'variant'}}”.` + (P(o.target) && P(o.target).type === 'receipt' ? ' The payment screen picks its wallet from this: a button named Bitcoin, Litecoin, USDT… (or a coin code like BTC) selects that coin.' : ''))
+           : field('Fixed value', inp(o.value, v => setAct({value: v.replace(/[^a-zA-Z0-9_.\-]/g, '')}), {placeholder: 'BTC'}), 'Example: variable “crypto” with value “BTC” lets a payment screen know which coin was picked.'));
+  }
+  if (o.kind === 'url') ed.append(field('Link address', inp(o.url, v => setAct({url: v.trim()}), {placeholder: 'https://t.me/yourchannel'})));
+  if (o.kind === 'builtin') ed.append(field('Feature', sel_(Object.entries(BUILTINS), o.key, v => setAct({key: v}))));
+  ed.append(field('Colour hint', sel_([['', 'None'], ['green', '🟢 Green'], ['red', '🔴 Red'], ['check', '✅ Check'], ['cross', '❌ Cross']], b.style || '', v => edit(() => { if (v) b.style = v; else delete b.style; }))));
+  const row = p.rows[ri];
+  ed.append(h('div', {class: 'acts'},
+    h('button', {disabled: bi === 0, onclick: () => edit(() => { [row[bi - 1], row[bi]] = [row[bi], row[bi - 1]]; selBtn = [ri, bi - 1]; }, {inspector: true})}, '← Left'),
+    h('button', {disabled: bi === row.length - 1, onclick: () => edit(() => { [row[bi + 1], row[bi]] = [row[bi], row[bi + 1]]; selBtn = [ri, bi + 1]; }, {inspector: true})}, 'Right →'),
+    row.length > 1 ? h('button', {title: 'Put this button on its own row', onclick: () => edit(() => { row.splice(bi, 1); p.rows.splice(ri + 1, 0, [b]); selBtn = [ri + 1, 0]; }, {inspector: true})}, '⤓ Own row') : null,
+    ri > 0 && p.rows[ri - 1].length < 4 ? h('button', {title: 'Move beside the button above', onclick: () => edit(() => { row.splice(bi, 1); p.rows[ri - 1].push(b); if (!row.length) p.rows.splice(ri, 1); selBtn = [ri - 1, p.rows[ri - 1].length - 1]; }, {inspector: true})}, '⤒ Join row above') : null));
+  return ed;
+}
+
+function coinButtonsDialog(id) {
+  const targets = screenOptions().filter(([k]) => k !== id);
+  let target = targets[0] ? targets[0][0] : '';
+  const body = h('div', {}, h('p', {class: 'hint', style: 'margin:0 0 10px'}, 'Adds one button per enabled payment coin (' + enabledCoins().map(c => c.code).join(', ') + '). Pressing one remembers the coin as “crypto” and opens the screen you pick — usually a Payment screen.'),
+    field('Open this screen', sel_([...targets, ['__new', '＋ Create a payment screen']], target, v => target = v)));
+  modal('Add payment-coin buttons', body, [h('button', {class: 'primary', onclick: () => {
+    closeModal();
+    edit(() => {
+      let t = target;
+      if (t === '__new') { t = uniqueId('payment'); cfg.pages[t] = {title: 'Payment', type: 'receipt', image: '', parse_mode: 'HTML', show_admin_button: false, text: {[cfg.default_lang]: 'Send <code>{crypto_amount}</code> {coin} to:\n<code>{wallet}</code>'}, rows: [[{label: {[cfg.default_lang]: '⬅️ Back'}, action: 'page:' + id}]],
+        receipt: {coin_var: 'crypto', coin_fixed: '', amount_var: 'price', fiat_to_usd: 1.0, use_qr: true, request_id_var: 'request_id'}}; const pos = cfg._layout[id] || [60, 60]; cfg._layout[t] = [pos[0] + 320, pos[1] + 80]; }
+      if (!t) return;
+      enabledCoins().forEach(c => P(id).rows.push([{label: {[cfg.default_lang]: c.label}, action: `choose:crypto:${c.code}:${t}`}]));
+    }, {inspector: true});
+  }}, 'Add buttons')]);
+}
+function backButtonDialog(id) {
+  const targets = screenOptions().filter(([k]) => k !== id);
+  let target = cfg.start_page !== id ? cfg.start_page : (targets[0] ? targets[0][0] : '');
+  modal('Add a back button', field('Go back to', sel_(targets, target, v => target = v)), [h('button', {class: 'primary', onclick: () => { closeModal(); if (!target) return;
+    edit(() => { const lb = {}; cfg.langs.forEach(l => lb[l] = {en: '⬅️ Back', ka: '⬅️ უკან', ru: '⬅️ Назад'}[l] || '⬅️'); P(id).rows.push([{label: lb, action: 'page:' + target}]); selBtn = [P(id).rows.length - 1, 0]; }, {inspector: true}); }}, 'Add')]);
+}
+
+// ── type specific ─────────────────────────────────────────────────────────
+function flowTargetSelect(cur, onPick, srcId) {
+  return sel_([['', '— nowhere (back to start) —'], ...screenOptions(), ['__new', '＋ Create a new screen…']], cur || '', v => {
+    if (v === '__new') { const t = prompt('Name of the new screen', 'New screen'); if (!t) { renderInspector(); return; }
+      edit(() => { const nid = uniqueId(t); cfg.pages[nid] = {title: t, type: 'message', image: '', parse_mode: 'HTML', show_admin_button: false, text: {[cfg.default_lang]: ''}, rows: [[{label: {[cfg.default_lang]: '⬅️ Back'}, action: 'page:' + srcId}]]};
+        const pos = cfg._layout[srcId] || [60, 60]; cfg._layout[nid] = [pos[0] + 320, pos[1] + 60]; onPick(nid); }, {inspector: true}); }
+    else edit(() => onPick(v), {inspector: true});
+  });
+}
+function inputSettings(p) {
+  const i = p.input, w = h('div', {});
+  w.append(h('div', {class: 'hint', style: 'margin:0 0 6px'}, 'This screen shows its text, then waits for the user to type a reply. A valid reply is saved and the next screen opens.'),
+    field('Save the answer as', inp(i.var, v => edit(() => { i.var = v.replace(/[^a-zA-Z0-9_]/g, ''); }, {key: 'iv'}), {placeholder: 'amount'}), 'Use it later as {' + (i.var || 'amount') + '} in any text.'),
+    field('Answer type', sel_([['number', 'A number'], ['text', 'Free text']], i.kind, v => edit(() => { i.kind = v; }, {inspector: true}))));
+  if (i.kind === 'number') w.append(h('div', {class: 'row'}, h('div', {class: 'grow'}, field('Minimum', inp(i.min ?? '', v => edit(() => { i.min = v === '' ? null : Number(v); }, {key: 'imn'}), {type: 'number'}))),
+    h('div', {class: 'grow'}, field('Maximum', inp(i.max ?? '', v => edit(() => { i.max = v === '' ? null : Number(v); }, {key: 'imx'}), {type: 'number'})))));
+  else w.append(field('Must match pattern (optional, regex)', inp(i.regex || '', v => edit(() => { i.regex = v; }, {key: 'irx'}), {placeholder: '^[A-Za-z ]{2,40}$'})));
+  w.append(field(`Message when the answer is wrong · ${LANG_NAMES[editLang] || editLang}`, textArea(i.error, {parse_mode: ''}, {key: 'err', small: true, placeholder: '❌ Invalid value, try again.'})),
+    field('Then open', flowTargetSelect(i.next, v => { i.next = v; }, sel)));
+  return w;
+}
+function listSettings(p) {
+  const src = p.source || 'products', vclean = v => v.replace(/[^a-zA-Z0-9_]/g, '');
+  const cleanVar = (key, label, hint) => field(label, inp(p[key] || '', v => edit(() => { if (vclean(v)) p[key] = vclean(v); else delete p[key]; }, {key: 'l_' + key}), {placeholder: '(none)'}), hint);
+  return h('div', {}, h('div', {class: 'hint', style: 'margin:0 0 6px'}, 'Shows one button for every city, category, product or district you add in Global Admin. Buttons you add above appear after the list.'),
+    field('What to list', sel_([['cities', '🏙 Cities'], ['categories', '🗂 Categories'], ['products', '🛍 Products'], ['districts', '🗺 Districts']], src, v => edit(() => { p.source = v; if (v === 'cities' && (!p.item_var || p.item_var === 'product')) p.item_var = 'city'; if (v === 'categories' && (!p.item_var || p.item_var === 'product')) p.item_var = 'category'; if (v === 'districts' && (!p.item_var || p.item_var === 'product')) p.item_var = 'district'; }, {inspector: true}))),
+    src !== 'cities' ? field('City', inp(p.city || 'tbilisi', v => edit(() => { p.city = vclean(v); }, {key: 'lc'})), 'Used when no “city from variable” below is set. Matches the city on each product.') : null,
+    src !== 'cities' ? cleanVar('city_var', 'City comes from variable', 'Fill this (usually “city”) to use the city the user picked on a Cities list. Leave empty for a fixed city.') : null,
+    src === 'products' ? cleanVar('category_var', 'Only products of the category in variable', 'Usually “category” — the pick from a Categories list. Empty = all products of the city.') : null,
+    src === 'districts' ? cleanVar('product_var', 'Only districts of the product in variable', 'Usually “product” — keeps just the districts you assigned to that product (all districts if none assigned).') : null,
+    src === 'categories' ? h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: p.hide_empty !== false, onchange: ev => edit(() => { if (ev.target.checked) delete p.hide_empty; else p.hide_empty = false; })}), 'Hide categories that have no products') : null,
+    field('Remember the pick as', inp(p.item_var || 'product', v => edit(() => { p.item_var = vclean(v); }, {key: 'lv'}))),
+    field('When an item is picked, open', flowTargetSelect(p.item_target, v => { p.item_target = v; }, sel)),
+    h('div', {class: 'hint'}, 'Later screens can show what was picked with {city_name} {category_name} {product_name} {district_name}. To show product details ({name} {price} {description}) enable Advanced → “Show details of the item the user picked”.'));
+}
+async function openFlowModal() {
+  const choose = async kind => {
+    try {
+      const r = await api(B(`/api/flow-recipe?kind=${kind}&langs=${encodeURIComponent(cfg.langs.join(','))}&taken=${encodeURIComponent(Object.keys(cfg.pages).join(','))}&back=${encodeURIComponent(cfg.start_page)}`));
+      closeModal();
+      edit(() => {
+        const xs = Object.values(cfg._layout).map(x => x[0]), ys = Object.values(cfg._layout).map(x => x[1]);
+        const ox = xs.length ? Math.min(...xs) : 60, oy = ys.length ? Math.max(...ys) + 260 : 60;
+        if (cfg.currency) stripMoneySigns(r.pages);
+        Object.assign(cfg.pages, r.pages);
+        for (const [pid, xy] of Object.entries(r.layout)) cfg._layout[pid] = [ox + xy[0], oy + xy[1]];
+        const start = cfg.pages[cfg.start_page];
+        if (start && !start.rows.flat().some(b => b.action === 'page:' + r.entry)) start.rows.push([{label: Object.fromEntries(cfg.langs.map(l => [l, (r.entry_label && (r.entry_label[l] || r.entry_label.en)) || '🛍 Shop'])), action: 'page:' + r.entry}]);
+        sel = r.entry;
+      }, {inspector: true});
+      setTimeout(() => { selectPage(r.entry); fitView(); }, 0);
+      toast('Added — a button on your start screen opens it', 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  const opt = (kind, ic, name, flow, desc) => h('div', {class: 'opt', style: 'margin-bottom:10px', onclick: () => choose(kind)}, h('b', {}, ic + ' ' + name), h('div', {style: 'font-size:12px;margin:6px 0;color:var(--text)'}, flow), h('span', {}, desc));
+  modal('Add a ready-made flow', h('div', {}, h('div', {class: 'hint', style: 'margin:0 0 12px'}, 'Adds wired-up screens you can edit freely. Both flows can live in the same bot — pick the one you want users to enter from a button. Categories are managed in Global Admin → Products, or in the bot’s admin menu.'),
+    opt('language', '🌐', 'Language picker', 'Start screen → Language → (back to the start screen)', 'One button per language of this bot. Pressing one switches the user’s language and returns to the start screen.'),
+    opt('classic', '🛍', 'Classic', 'Products → District → Payment', 'The user picks a product first, then where to get it.'),
+    opt('categories', '🗂', 'With categories', 'City → Category → Listing → District → Variant → Payment', 'Cities and categories narrow things down first. The Variant screen is a plain screen with buttons — rename or add as many as you like.')), [], {small: false});
+}
+function historySettings(p) {
+  const hs = p.history;
+  return h('div', {}, h('div', {class: 'hint', style: 'margin:0 0 6px'}, 'Put {purchases} in the text above — it becomes the user’s list of bought items, newest first. Admins record purchases in the web Global Admin (Users → 🧾 Purchases) or in the bot’s own admin menu (🧾 Purchase history). Also available: {purchase_count} and {purchase_total}.'),
+    field('How many to show', inp(hs.limit, v => edit(() => { hs.limit = Math.max(1, Math.min(30, parseInt(v) || 10)); }, {key: 'hl'}), {type: 'number', min: 1, max: 30})),
+    field(`One line looks like · ${LANG_NAMES[editLang] || editLang}`, inp(hs.line[editLang] || '', v => edit(() => { hs.line[editLang] = v; }, {key: 'hline' + editLang}), {placeholder: '🛒 {date} — {product} — {price}$'}), 'Use {date} {product} {price} {note}. Leave empty for the default.'),
+    field(`When there are none · ${LANG_NAMES[editLang] || editLang}`, inp(hs.empty[editLang] || '', v => edit(() => { hs.empty[editLang] = v; }, {key: 'hemp' + editLang}), {placeholder: 'No purchases yet.'})),
+    demoPurchases(p));
+}
+const DEMO_LINKS = ['https://ihosol.online/i/2026/08/7d629/8b3be3adea46740272831fcffc5856f0-img_4517.jpg', 'https://ihosol.online/i/2026/07/c03c6/4489e09a7783f3a8f80bdca8c462ee3b-img_4369.jpg', 'https://ihosol.online/i/2026/04/73e18/9cf6c6616552f9ba8f6afbdf02d38d4b.jpg'];
+function demoPurchases(p) {
+  const hs = p.history, fk = hs.fake, on = !!(fk && fk.enabled);
+  const box = h('div', {class: 'card', style: 'margin-top:12px'});
+  box.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: on, onchange: ev => { edit(() => {
+    if (!hs.fake) hs.fake = {enabled: false, links: [...DEMO_LINKS], min: 1, max: 3, line: {}};
+    hs.fake.enabled = ev.target.checked; }, {inspector: true}); }}), h('b', {}, ' Demo purchases (switch)')));
+  box.append(h('div', {class: 'hint', style: 'margin:4px 0 0'}, on
+    ? 'ON: every user who starts the bot is given a random number of purchases, shown here as links to the products. Real purchases are still recorded and listed before them. Turn the switch off and this screen shows only real purchases again.'
+    : 'OFF: this screen shows only real purchases. Turn on to give every new user a random number of demo purchases shown as product links.'));
+  if (!on) return box;
+  const linksTa = h('textarea', {style: 'min-height:90px', placeholder: 'One link per line (https://…)', oninput: ev => edit(() => { fk.links = ev.target.value.split('\n').map(x => x.trim()).filter(Boolean); }, {key: 'fklinks'})});
+  linksTa.value = (fk.links || []).join('\n');
+  box.append(field('Product links (each user gets a random selection of these)', linksTa),
+    h('div', {class: 'row'}, h('div', {class: 'grow'}, field('At least', inp(fk.min ?? 1, v => edit(() => { fk.min = Math.max(1, parseInt(v) || 1); }, {key: 'fkmin'}), {type: 'number', min: 1}))),
+      h('div', {class: 'grow'}, field('At most', inp(fk.max ?? 3, v => edit(() => { fk.max = Math.max(1, parseInt(v) || 3); }, {key: 'fkmax'}), {type: 'number', min: 1})))),
+    field(`One line looks like · ${LANG_NAMES[editLang] || editLang}`, inp(fk.line[editLang] || '', v => edit(() => { fk.line[editLang] = v; }, {key: 'fkline' + editLang}), {placeholder: '🛒 {n}. {link}'}), 'Use {n} (1, 2, 3…) and {link}. Leave empty for the default.'),
+    h('div', {class: 'hint'}, 'Assigned once, the first time a user starts the bot (or opens this screen), and kept. “Number of purchases” buttons ({purchase_count}) include them.'));
+  return box;
+}
+function receiptSettings(p) {
+  const r = p.receipt;
+  return h('div', {}, h('div', {class: 'hint', style: 'margin:0 0 6px'}, 'Works out the amount in crypto at the live rate and shows the wallet address (and QR code). Use {coin} {wallet} {crypto_amount} {crypto_price} (same amount without extra zeros, e.g. 35 USDT) {usd_amount} {request_id} in the text.'),
+    field('Coin comes from', sel_([['', 'Whatever the user picked (variable)'], ...enabledCoins().map(c => [c.code, 'Always ' + c.label])], r.coin_fixed || '', v => edit(() => { r.coin_fixed = v; }, {inspector: true}))),
+    !r.coin_fixed ? field('Pick is stored in variable', inp(r.coin_var, v => edit(() => { r.coin_var = v.replace(/[^a-zA-Z0-9_]/g, ''); }, {key: 'rcv'}))) : null,
+    field('Amount comes from variable', inp(r.amount_var, v => edit(() => { r.amount_var = v.replace(/[^a-zA-Z0-9_]/g, ''); }, {key: 'rav'})), '“price” = the picked product’s price; “amount” = a number the user typed.'),
+    field('Multiply amount by', inp(r.fiat_to_usd, v => edit(() => { r.fiat_to_usd = Number(v) || 1; }, {key: 'rfx'}), {type: 'number', step: '0.01'}), 'Converts your currency to USD (1 = amounts are already USD).'),
+    h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: r.use_qr !== false, onchange: ev => edit(() => { r.use_qr = ev.target.checked; })}), 'Show a QR code of the wallet'));
+}
+
+// ── automation ────────────────────────────────────────────────────────────
+function automation(p) {
+  const w = h('div', {}); const oe = p.on_enter;
+  const ensure = () => { if (!p.on_enter) p.on_enter = {notify_admins: {}, set_vars: {}, send: []}; return p.on_enter; };
+  w.append(h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Things that happen automatically the moment a user reaches this screen.'));
+  const hasN = oe && Object.values(oe.notify_admins || {}).some(v => v && v.trim());
+  w.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: hasN || w._n, onchange: ev => { if (ev.target.checked) { edit(() => { ensure(); if (!ML(p.on_enter.notify_admins)) p.on_enter.notify_admins[editLang] = '{username} (id {user_id}) opened this screen'; }, {inspector: true}); } else edit(() => { if (p.on_enter) p.on_enter.notify_admins = {}; }, {inspector: true}); }}), '📣 Send a message to all admins'));
+  if (hasN) w.append(textArea(p.on_enter.notify_admins, {parse_mode: ''}, {key: 'note', small: true}), h('div', {class: 'hint'}, 'Plain text. Use {username} {user_id} and any value.'));
+  w.append(h('div', {class: 'row', style: 'margin-top:10px'}, h('b', {style: 'font-size:12px'}, 'Set values'), h('span', {class: 'grow'}), h('button', {class: 'ghost', onclick: () => edit(() => { ensure().set_vars = ensure().set_vars || {}; let k = 'value', n = 1; while (p.on_enter.set_vars[k]) k = 'value' + ++n; p.on_enter.set_vars[k] = ''; }, {inspector: true})}, '＋ Add')));
+  Object.entries((oe && oe.set_vars) || {}).forEach(([k, v]) => w.append(h('div', {class: 'row', style: 'margin-top:4px'},
+    h('div', {class: 'grow'}, inp(k, nv => { nv = nv.replace(/[^a-zA-Z0-9_]/g, ''); if (!nv || nv === k) return; edit(() => { const sv = p.on_enter.set_vars, out = {}; Object.keys(sv).forEach(x => out[x === k ? nv : x] = sv[x]); p.on_enter.set_vars = out; k = nv; }, {key: 'svk'}); })),
+    h('div', {class: 'grow'}, inp(v, nv => edit(() => { p.on_enter.set_vars[k] = nv; }, {key: 'svv'}))),
+    h('button', {class: 'ghost', onclick: () => edit(() => { delete p.on_enter.set_vars[k]; }, {inspector: true})}, '✕'))));
+  w.append(h('div', {class: 'row', style: 'margin-top:12px'}, h('b', {style: 'font-size:12px'}, 'Extra messages to the user'), h('span', {class: 'grow'}), h('button', {class: 'ghost', onclick: () => edit(() => { ensure().send = ensure().send || []; p.on_enter.send.push({text: {[cfg.default_lang]: ''}, image: ''}); }, {inspector: true})}, '＋ Add')));
+  ((oe && oe.send) || []).forEach((m, mi) => w.append(h('div', {class: 'card'}, textArea(m.text, p, {key: 'send' + mi, small: true, placeholder: 'Extra message text'}),
+    h('div', {class: 'row', style: 'margin-top:6px'}, m.image ? h('span', {class: 'tag'}, (VIDEO_RE.test(m.image) ? '🎬 ' : '🖼 ') + m.image) : h('span', {class: 'mut', style: 'font-size:12px'}, 'No picture'),
+      h('span', {class: 'grow'}), h('button', {onclick: () => openImagePicker(m.image, nm => edit(() => { m.image = nm; }, {inspector: true}))}, 'Media…'),
+      h('button', {class: 'ghost danger', onclick: () => edit(() => { p.on_enter.send.splice(mi, 1); }, {inspector: true})}, '✕')))));
+  return w;
+}
+
+function duplicateScreen(id) {
+  edit(() => { const nid = uniqueId(pname(id) + ' copy'); cfg.pages[nid] = clone(P(id)); cfg.pages[nid].title = pname(id) + ' copy'; const p = cfg._layout[id] || [60, 60]; cfg._layout[nid] = [p[0] + 40, p[1] + 60]; sel = null; setTimeout(() => selectPage(nid), 0); }, {});
+}
+function deleteScreen(id) {
+  if (id === cfg.start_page) { toast('This is the start screen — make another screen the start screen first.', 'err'); return; }
+  let incoming = 0; Object.values(cfg.pages).forEach(q => { q.rows.flat().forEach(b => { if (actionTarget(b.action) === id) incoming++; }); if (q.input && q.input.next === id) incoming++; if (q.item_target === id) incoming++; });
+  if (!confirm(`Delete “${pname(id)}”?` + (incoming ? `\n\n${incoming} button(s) lead here — they will be set to “do nothing”.` : ''))) return;
+  edit(() => {
+    Object.values(cfg.pages).forEach(q => { q.rows.flat().forEach(b => { if (actionTarget(b.action) === id) b.action = 'noop'; }); if (q.input && q.input.next === id) q.input.next = ''; if (q.item_target === id) q.item_target = ''; });
+    delete cfg.pages[id]; delete cfg._layout[id]; sel = null; selBtn = null;
+  }, {inspector: true});
+}
+
+// ══ modal / pickers ═════════════════════════════════════════════════════
+function modal(title, body, footer = [], opts = {}) {
+  closeModal();
+  const m = h('div', {class: 'modal' + (opts.small === false ? '' : ' sm'), onclick: ev => ev.stopPropagation()},
+    h('div', {class: 'mh'}, h('h2', {}, title), h('button', {class: 'ghost', onclick: closeModal}, '✕')),
+    h('div', {class: 'mb'}, body), footer.length ? h('div', {class: 'mf'}, footer) : null);
+  $('#modalRoot').append(h('div', {class: 'ov', onclick: closeModal}, m)); return m;
+}
+function closeModal() { $('#modalRoot').replaceChildren(); }
+
+const VIDEO_RE = /\.(mp4|mov|webm|m4v)$/i, GIF_RE = /\.gif$/i;
+const mediaKind = n => GIF_RE.test(n) ? 'GIF' : VIDEO_RE.test(n) ? 'Video' : 'Picture';
+function mediaEl(name, attrs = {}) {
+  const src = B('/api/image/' + encodeURIComponent(name));
+  if (VIDEO_RE.test(name)) return h('video', Object.assign({src, muted: true, loop: true, autoplay: true, playsinline: true, preload: 'metadata'}, attrs));
+  return h('img', Object.assign({src, loading: 'lazy'}, attrs));
+}
+async function loadImages() { try { images = (await api(B('/api/images'))).images; } catch (e) { images = []; } }
+async function uploadFiles(files, after) {
+  for (const f of files) {
+    const fd = new FormData(); fd.append('file', f);
+    try { await api(B('/api/images'), {method: 'POST', body: fd}); toast('Uploaded ' + f.name, 'ok'); } catch (e) { toast(f.name + ': ' + e.message, 'err'); }
+  }
+  await loadImages(); if (after) after();
+}
+function imageGrid(current, onPick, onDelete) {
+  const g = h('div', {class: 'imggrid'});
+  if (onPick) g.append(h('div', {class: 'imgc' + (!current ? ' on' : ''), onclick: () => onPick('')}, h('div', {style: 'height:90px;display:flex;align-items:center;justify-content:center;color:var(--text2)'}, 'No picture'), h('div', {class: 'nm'}, '—')));
+  images.forEach(im => g.append(h('div', {class: 'imgc' + (current === im.name ? ' on' : ''), onclick: onPick ? () => onPick(im.name) : null},
+    mediaEl(im.name), im.kind && im.kind !== 'photo' ? h('div', {class: 'kd'}, im.kind === 'video' ? '🎬 video' : 'GIF') : null, h('div', {class: 'nm', title: im.name}, im.name),
+    onDelete ? h('button', {class: 'del danger', title: 'Delete image', onclick: ev => { ev.stopPropagation(); onDelete(im.name); }}, '✕') : null)));
+  return g;
+}
+function dropZone(after) {
+  const fi = h('input', {type: 'file', accept: 'image/*,video/mp4,video/quicktime,video/webm', multiple: true, style: 'display:none', onchange: () => uploadFiles([...fi.files], after)});
+  const z = h('div', {class: 'drop', ondragover: ev => { ev.preventDefault(); z.classList.add('over'); }, ondragleave: () => z.classList.remove('over'),
+    ondrop: ev => { ev.preventDefault(); z.classList.remove('over'); uploadFiles([...ev.dataTransfer.files], after); }},
+    'Drag pictures, GIFs or videos here or ', h('button', {onclick: () => fi.click()}, 'Upload'), fi, h('div', {class: 'hint'}, 'JPG, PNG, WEBP, GIF · up to 8 MB   |   MP4, MOV, WEBM video · up to 48 MB'));
+  return z;
+}
+function openImagePicker(current, cb) {
+  const body = h('div'); const draw = () => { body.replaceChildren(dropZone(draw), imageGrid(current, nm => { closeModal(); cb(nm); })); };
+  draw(); modal('Choose a picture, GIF or video', body, [], {small: false});
+}
+
+// ══ top bar ═════════════════════════════════════════════════════════════
+function setEditLang(l) { editLang = l; renderTop(); renderCanvas(); renderInspector(); renderPreview(); }
+function renderTop() {
+  $('#botTitle').textContent = DISPLAY;
+  const st = $('#status'), d = dirty();
+  st.textContent = d ? '● Unpublished changes' : '✓ Published — live'; st.className = d ? 'dirty' : 'ok';
+  const lt = $('#langTabs'); lt.replaceChildren(...cfg.langs.map(l => h('button', {class: l === editLang ? 'on' : '', onclick: () => setEditLang(l), title: LANG_NAMES[l] || l}, l.toUpperCase())));
+  $('#undoBtn').disabled = !undoStack.length; $('#redoBtn').disabled = !redoStack.length;
+  const iss = computeIssues(), errs = iss.filter(i => i.level === 'error').length;
+  const ib = $('#issuesBtn');
+  ib.textContent = iss.length ? `${errs ? '✖' : '⚠'} ${iss.length} to check` : '✔ No problems';
+  ib.className = errs ? 'err' : iss.length ? 'has' : '';
+  $('#publishBtn').disabled = false;
+}
+
+// ══ checks ═════════════════════════════════════════════════════════════
+function computeIssues() {
+  const out = [], push = (level, page, msg) => out.push({level, page, msg});
+  if (!cfg.pages[cfg.start_page]) push('error', null, 'The start screen does not exist.');
+  const incoming = {}, incomingChoose = {};
+  if (cfg.gate && cfg.gate.enabled) {
+    if (!/^https:\/\//.test(cfg.gate.url || '')) push('error', null, 'Channel gate: add the join link (https://…).');
+    if (cfg.gate.mode !== 'dummy' && !/^(@[A-Za-z]\w{3,31}|-100\d{5,15})$/.test(cfg.gate.channel || '')) push('error', null, 'Channel gate: enter the channel (@name or numeric id) so the bot can check members.');
+  }
+  for (const [id, p] of Object.entries(cfg.pages)) {
+    const nm = pname(id);
+    if (!Object.values(p.text).some(v => (v || '').trim()) && !p.image && p.type !== 'receipt') push('warn', id, `“${nm}” has no text and no picture.`);
+    if (p.type === 'history' && !Object.values(p.text).some(v => (v || '').includes('{purchases}'))) push('warn', id, `“${nm}” is a purchase-history screen but its text has no {purchases}.`);
+    if (cfg.langs.length > 1) { const miss = cfg.langs.filter(l => !(p.text[l] || '').trim()); if (miss.length && miss.length < cfg.langs.length) push('warn', id, `“${nm}” has no text in ${miss.map(l => l.toUpperCase()).join(', ')}.`); }
+    p.rows.forEach(row => row.forEach(b => {
+      const lab = b.label[cfg.default_lang] || Object.values(b.label).find(Boolean);
+      if (!lab) push('error', id, `“${nm}” has a button with no label.`);
+      const o = parseAction(b.action), bl = lab || '(no label)';
+      if (o.kind === 'buy' && o.low) { if (!cfg.pages[o.low]) push('error', id, `Button “${bl}” on “${nm}”: the “balance too small” screen no longer exists.`); else incoming[o.low] = 1; }
+      if (o.kind === 'setlang' && !cfg.langs.includes(o.lang)) push('error', id, `Button “${bl}” on “${nm}” switches to a language this bot doesn't have (${o.lang}).`);
+      if (o.kind === 'setlang' && !o.target) { /* returns to the start screen */ } else if (['page', 'confirm', 'choose', 'buy', 'setlang'].includes(o.kind)) {
+        if (!o.target) push('error', id, `Button “${bl}” on “${nm}” doesn't open any screen yet.`);
+        else if (!cfg.pages[o.target]) push('error', id, `Button “${bl}” on “${nm}” opens a screen that no longer exists.`);
+        else incoming[o.target] = 1;
+      }
+      if (o.kind === 'choose') {
+        if (!/^[a-zA-Z0-9_]{1,30}$/.test(o.var)) push('error', id, `Button “${bl}” on “${nm}”: the remembered variable name is empty or invalid.`);
+        if (o.value !== '@' && !/^[a-zA-Z0-9_.\-]{1,40}$/.test(o.value)) push('error', id, `Button “${bl}” on “${nm}”: the remembered value is empty or invalid.`);
+      }
+      if (o.kind === 'choose' && o.target && cfg.pages[o.target] && cfg.pages[o.target].type === 'receipt') incomingChoose[o.target] = 1;
+      if (o.kind === 'url' && !/^https?:\/\/\S{1,300}$/.test(o.url)) push('error', id, `Button “${bl}” on “${nm}” has an invalid link (must start with http:// or https://).`);
+      if (['page', 'url', 'choose', 'confirm', 'buy', 'setlang'].includes(o.kind) === false && o.kind === 'noop') push('warn', id, `Button “${bl}” on “${nm}” does nothing.`);
+    }));
+    if (p.type === 'input') {
+      if (!p.input || !p.input.var) push('error', id, `“${nm}” needs a name to save the answer under.`);
+      else if (p.input.next) { if (!cfg.pages[p.input.next]) push('error', id, `“${nm}” continues to a missing screen.`); else incoming[p.input.next] = 1; }
+      else push('warn', id, `“${nm}” has no next screen — users return to the start after answering.`);
+    }
+    if (p.type === 'receipt' && !(p.receipt && p.receipt.coin_fixed) && !incomingChoose[id]) push('warn', id, `Payment screen “${nm}” doesn't know which coin to use: no button leads to it with “Remember a choice” (for example buttons named Bitcoin / Litecoin), and no fixed coin is set — it will fall back to ${(enabledCoins()[0] || {code: 'BTC'}).code}.`);
+    if (p.type === 'list') {
+      if (p.item_target) { if (!cfg.pages[p.item_target]) push('error', id, `“${nm}” opens a missing screen when an item is picked.`); else incoming[p.item_target] = 1; }
+      else push('warn', id, `“${nm}” does not say which screen opens when an item is picked.`);
+    }
+  }
+  for (const id of Object.keys(cfg.pages)) if (id !== cfg.start_page && !incoming[id]) push('warn', id, `“${pname(id)}” can't be reached — no button leads to it.`);
+  const codes = (cfg.payments.coins || []).map(c => c.code.toUpperCase()); const dup = codes.find((c, i) => codes.indexOf(c) !== i);
+  if (dup) push('error', null, `Payment coin ${dup} is listed twice.`);
+  (cfg.payments.coins || []).forEach(c => { if (!/^[A-Z0-9]{2,10}$/.test(c.code.toUpperCase())) push('error', null, `Payment coin code “${c.code}” must be 2–10 letters/digits.`); });
+  if (envState) { const usesPay = Object.values(cfg.pages).some(p => p.type === 'receipt');
+    if (usesPay) enabledCoins().forEach(c => { if (!(envState.wallets[c.code] || '').trim()) push('warn', null, `No wallet address set for ${c.code} (Settings → Payments).`); }); }
+  return out;
+}
+function showIssues() {
+  const iss = computeIssues(), body = h('div');
+  if (!iss.length) body.append(h('div', {class: 'empty'}, '✔ Everything looks good.'));
+  iss.forEach(i => body.append(h('div', {class: 'iss', onclick: () => { closeModal(); if (i.page) { sel = null; selectPage(i.page); centerOn(i.page); } else if (/wallet|coin/i.test(i.msg)) openSettings('payments'); }},
+    h('span', {}, i.level === 'error' ? '✖' : '⚠'), h('span', {class: 'grow'}, i.msg))));
+  modal('Things to check', body, [], {small: false});
+}
+
+// ══ phone preview ═══════════════════════════════════════════════════════
+const MONEY_VARS = ['balance', 'price', 'product_price', 'amount', 'purchase_total', 'earned', 'shortage'];
+const CURRENCY_PRESETS = [['USD', '$'], ['EUR', '€'], ['GEL', 'ლ'], ['RUB', '₽'], ['UAH', '₴'], ['TRY', '₺'], ['GBP', '£'], ['PLN', 'zł'], ['KZT', '₸'], ['AED', 'AED'], ['CAD', 'C$'], ['AUD', 'A$']];
+let liveRate = null;   // {code, v} = USD per 1 unit of the bot's currency, fetched on demand
+function curUsd() { const c = cfg.currency; if (!c || c.code === 'USD') return 1; if (c.rate !== 'auto') return Number(c.rate) || 1; return liveRate && liveRate.code === c.code ? liveRate.v : 1; }
+function fmtMoney(x, c = cfg.currency) {
+  c = c || {symbol: '$', position: 'after', space: false};
+  let n = Number(x); if (isNaN(n)) return String(x);
+  let t = (Math.round(n * 100) / 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, ''); if (t === '-0' || t === '') t = '0';
+  const g = c.space ? ' ' : '';
+  return c.position === 'before' ? c.symbol + g + t : t + g + c.symbol;
+}
+const MONEY_SIGN = /(\{(?:balance|price|product_price|amount|purchase_total|earned)\})\s*\$|\$\s*(\{(?:balance|price|product_price|amount|purchase_total|earned)\})/g;
+function stripMoneySigns(node) {   // removes hard-coded "$" next to money values; returns how many were removed
+  let n = 0;
+  const walk = o => {
+    if (Array.isArray(o)) o.forEach((x, i) => { if (typeof x === 'string') { const y = x.replace(MONEY_SIGN, (m, a, b) => { n++; return a || b; }); o[i] = y; } else walk(x); });
+    else if (o && typeof o === 'object') for (const k of Object.keys(o)) {
+      if (k === '_layout' || k === 'strings' || k === 'currency') continue;
+      if (typeof o[k] === 'string') { o[k] = o[k].replace(MONEY_SIGN, (m, a, b) => { n++; return a || b; }); } else walk(o[k]);
+    }
+  };
+  walk(node); return n;
+}
+async function refreshLiveRate() {
+  const c = cfg.currency; if (!c || c.code === 'USD' || c.rate !== 'auto') return null;
+  try { const r = await api(B('/api/currency-rate?code=' + encodeURIComponent(c.code))); if (r.ok) { liveRate = {code: c.code, v: r.usd_per_unit}; return r; } return r; } catch (e) { return null; }
+}
+const RATE = {BTC: 70000, LTC: 80, ETH: 3000, TRX: 0.25, TON: 5, SOL: 150, DOGE: 0.15, XRP: 0.6, BNB: 600, BCH: 400};
+function tgHtml(text, mode) {
+  let t = esc(text);
+  if (mode === 'HTML') {
+    t = t.replace(/&lt;(\/?)(b|i|u|s|em|strong|code|pre)&gt;/g, '<$1$2>').replace(/&lt;a href="(https?:\/\/[^"<>]*)"&gt;/g, '<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/g, '</a>');
+  } else if (mode === 'Markdown') {
+    t = t.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*([^*]+)\*/g, '<b>$1</b>').replace(/_([^_]+)_/g, '<i>$1</i>');
+  }
+  return t.replace(/\n/g, '<br>');
+}
+function fmtVars(text, vars) { return String(text || '').replace(/\{(\w+)\}/g, (m, k) => k in vars ? vars[k] : m); }
+function coinCodeOf(val) {   // 'BTC', or a button text like 'Bitcoin' / 'USDT TRC20' -> coin code
+  if (typeof val !== 'string' || !val.trim()) return null;
+  const t = val.trim().toUpperCase(), coins = enabledCoins();
+  let c = coins.find(x => x.code === t) || coins.find(x => String(x.label).trim().toUpperCase() === t);
+  if (c) return c.code;
+  const first = t.split(/[\s:(\-]+/)[0];
+  c = coins.find(x => x.code === first || String(x.label).trim().toUpperCase().split(' ')[0] === first);
+  return c ? c.code : null;
+}
+function resolveCoin(r) {   // mirrors the bot: fixed coin, the variable, else the newest remembered value naming a coin
+  if (r.coin_fixed) return String(r.coin_fixed).toUpperCase();
+  let c = coinCodeOf(pv.vars[r.coin_var || 'crypto']); if (c) return c;
+  for (const [k, val] of Object.entries(pv.vars).reverse()) { if (k === 'coin') continue; c = coinCodeOf(val); if (c) return c; }
+  return (enabledCoins()[0] || {code: 'BTC'}).code;
+}
+function sampleVars(p) {
+  const v = Object.assign({balance: '25.00', user_id: '123456789', bot_username: (envState && envState.usernames && envState.usernames[0]) || 'yourbot', referrals: 3, earned: '1.50', ref_percent: (cfg.referral && cfg.referral.percent) || 2, ref_link: 'https://t.me/' + ((envState && envState.usernames && envState.usernames[0]) || 'yourbot') + '?start=123456789', username: '@you', cities: previewData.cities || 1, products_count: previewData.products.length, purchase_count: 2, purchase_total: 55, shortage: 5}, pv.vars);
+  const il = p.item_lookup || (p.type === 'receipt' && {var: 'product'});
+  if (il) { const it = previewData.products[0] || {name: 'Sample product', price_usd: 40}; v.name = pv.vars.name || it.name; v.description = pv.vars.description || 'Product description'; v.price = pv.vars.price ?? it.price_usd ?? 40; }
+  if (p.type === 'history') {
+    const hs = p.history || {}, line = hs.line && (hs.line[editLang] || hs.line[cfg.default_lang]) || '🛒 {date} — {product} — {price}$';
+    const rows = [{date: '2026-10-28 14:05', product: 'Sample product', price: 40, note: ''}, {date: '2026-10-21 09:30', product: 'Another item', price: 15, note: ''}];
+    const fk = hs.fake && hs.fake.enabled ? hs.fake : null, fl = fk && ((fk.line && (fk.line[editLang] || fk.line[cfg.default_lang])) || '🛒 {n}. {link}');
+    const demo = fk ? (fk.links || []).slice(0, Math.min(2, fk.links.length)).map((u, i) => fmtVars(fl, {n: i + 1, link: u})) : [];
+    v.purchases = rows.map(r => fmtVars(line, r)).concat(demo).join('\n'); v.purchase_count = rows.length + demo.length; v.purchase_total = 55;
+  }
+  if (p.type === 'receipt') {
+    const r = p.receipt || {}, coin = resolveCoin(r);
+    const c = enabledCoins().find(x => x.code === coin), stable = c ? c.stable || ['USDT', 'USDC'].includes(coin) : coin === 'USDT';
+    const usd = Math.round(Number(pv.vars[r.amount_var || 'amount'] ?? v.price ?? 40) * Number(r.fiat_to_usd || 1) * curUsd() * 100) / 100;
+    v.coin = coin; v.wallet = (envState && envState.wallets[coin]) || 'SAMPLE-WALLET-ADDRESS'; v.usd_amount = usd; v.amount = pv.vars[r.amount_var || 'amount'] ?? v.price ?? 40;
+    v.crypto_amount = stable ? usd.toFixed(2) : (usd / (RATE[coin] || 1)).toFixed(8); v.crypto_price = String(v.crypto_amount).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); v.request_id = 482913;
+  }
+  enabledCoins().forEach(c => {   // converted prices for coin buttons: {COIN_price} / {COIN_amount}
+    const stable = c.stable || ['USDT', 'USDC'].includes(c.code), conv = base => { const usd = Number(base) * curUsd(); return !(usd > 0) ? '—' : stable ? usd.toFixed(2) : (usd / (RATE[c.code] || 1)).toFixed(8).replace(/0+$/, '').replace(/\.$/, '.0'); };
+    v[c.code + '_price'] = conv(pv.vars.product_price ?? pv.vars.price ?? v.price ?? 40); v[c.code + '_amount'] = conv(pv.vars.amount ?? 25);
+  });
+  if (cfg.currency) for (const k of MONEY_VARS) if (k in v && v[k] !== '' && !isNaN(Number(v[k]))) { v[k + '_num'] = v[k]; v[k] = fmtMoney(v[k]); }
+  return v;
+}
+function renderPreview() {
+  const ph = $('#phone'); ph.style.display = showPhone ? '' : 'none'; if (!showPhone) return;
+  const id = pv.page && P(pv.page) ? pv.page : (P(sel) ? sel : cfg.start_page), p = P(id); ph.replaceChildren();
+  if (!p) return;
+  const vars = sampleVars(p), mode = p.parse_mode || '';
+  let raw = firstText(p.text);
+  if (mode === 'HTML') raw = raw.replace(/(<(?:code|pre)>\s*)?\{wallet\}(\s*<\/(?:code|pre)>)?/gi, (m, a, b) => (a && b) ? m : '<code>{wallet}</code>');
+  const text = fmtVars(raw, vars);
+  const bub = h('div', {class: 'bub'});
+  const dimg = p.image_from === 'district' ? (pv.vars.district_image || '') : '';
+  if (dimg) bub.append(mediaEl(dimg, {onerror: ev => ev.target.replaceWith(h('div', {class: 'noimg'}, '🖼 ' + dimg))}));
+  else if (p.type === 'receipt') bub.append(h('div', {class: 'noimg'}, p.receipt && p.receipt.use_qr !== false ? '▦ QR code of the wallet' : ''));
+  else if (p.image) bub.append(mediaEl(p.image, {onerror: ev => ev.target.replaceWith(h('div', {class: 'noimg'}, '🖼 ' + p.image))}));
+  const tx = h('div', {class: 'tx'}); tx.innerHTML = tgHtml(text, mode) || '<span style="opacity:.5">(empty message)</span>'; bub.append(tx);
+  const kb = h('div', {class: 'kb'});
+  const rows = [];
+  if (p.type === 'list') {
+    const items = ({districts: previewData.districts.slice(0, 12), categories: previewData.categories || [], cities: (previewData.city_names || []).map(c => ({name: c.replace(/_/g, ' ').replace(/^./, x => x.toUpperCase())}))}[p.source] || previewData.products); const list = items.length ? items : [{name: 'Item 1'}, {name: 'Item 2'}];
+    list.forEach(it => rows.push([{label: it.name + (it.price_usd ? ' — ' + it.price_usd + ' $' : ''), act: {kind: 'pickitem', target: p.item_target, it}}]));
+  }
+  p.rows.forEach(row => rows.push(row.map(b => { const lb = fmtVars((b.label[editLang] || b.label[cfg.default_lang] || ''), vars); return {label: lb, act: Object.assign(parseAction(b.action), {btnLabel: lb}), style: b.style}; })));
+  if (p.show_admin_button) rows.push([{label: '⚙ Admin panel', act: {kind: 'noop', admin: true}}]);
+  const px = {green: '🟢 ', red: '🔴 ', check: '✅ ', cross: '❌ '};
+  rows.forEach(row => kb.append(h('div', {class: 'kr'}, row.map(b => h('button', {title: b.act.kind, onclick: () => pvPress(id, p, b.act)}, (px[b.style] || '') + (b.label || '·'))))));
+  ph.append(h('div', {class: 'ph'}, h('div', {class: 'av'}, '🤖'), h('span', {}, '@' + vars.bot_username),
+    h('button', {class: 'ghost', title: 'Back', disabled: !pv.history.length, onclick: () => { pv.page = pv.history.pop(); renderPreview(); }}, '↩'),
+    h('button', {class: 'ghost', title: 'Restart the chat at the start screen', onclick: () => { pv.vars = {}; pv.history = []; pv.page = cfg.start_page; renderPreview(); }}, '⟳')));
+  const chat = h('div', {class: 'chat'}, bub, kb);
+  if (p.type === 'input' && p.input) {
+    const i = p.input, f = h('input', {placeholder: i.kind === 'number' ? 'Type a number…' : 'Type a reply…'});
+    chat.append(h('div', {class: 'askbox'}, f, h('button', {onclick: () => pvAnswer(p, f.value, f)}, 'Send')), h('div', {class: 'phnote'}, `⌨ waiting for the answer → {${i.var}}`));
+  }
+  chat.append(h('div', {class: 'phnote'}, `Preview of “${pname(id)}” · values are samples`));
+  ph.append(chat);
+}
+function pvGo(target) { if (!target || !P(target)) return; pv.history.push(pv.page); pv.page = target; renderPreview(); }
+function pvPress(id, p, a) {
+  if (a.kind === 'page') pvGo(a.target);
+  else if (a.kind === 'choose') { const val = a.value === '@' ? a.btnLabel : a.value; delete pv.vars[a.var]; pv.vars[a.var] = val; pvGo(a.target); }
+  else if (a.kind === 'confirm') { toast('Admins would be notified: “user pressed I paid”', 'ok'); pvGo(a.target); }
+  else if (a.kind === 'setlang') { if (cfg.langs.includes(a.lang)) setEditLang(a.lang); pvGo(a.target || cfg.start_page); }
+  else if (a.kind === 'buy') { toast('Would charge the picked product’s price from the balance and send its delivery text/picture', 'ok'); pvGo(a.target); }
+  else if (a.kind === 'pickitem') { pv.vars[p.item_var || 'product'] = 'sample'; if (p.source === 'districts') pv.vars.district_image = (a.it && a.it.image) || ''; if (a.it) { pv.vars.name = a.it.name; if (a.it.price_usd !== undefined) pv.vars.price = a.it.price_usd; } pvGo(a.target); }
+  else if (a.kind === 'url') window.open(a.url, '_blank', 'noopener');
+  else if (a.kind === 'builtin') toast('Built-in “' + (BUILTINS[a.key] || a.key) + '” runs inside the bot — not shown in the preview', '');
+  else if (a.admin || a.kind === 'admin') toast('Admins get the admin menu here', '');
+}
+function pvAnswer(p, raw, f) {
+  const i = p.input; raw = String(raw).trim(); let val = raw, ok = true;
+  if (i.kind === 'number') { val = Number(raw.replace(',', '.')); if (!raw || isNaN(val) || (i.min != null && val < i.min) || (i.max != null && val > i.max)) ok = false; }
+  else if (i.regex) { try { ok = new RegExp(i.regex).test(raw); } catch (e) { ok = true; } }
+  if (!ok) { toast(firstText(i.error) || '❌ Invalid value, try again.', 'err'); f.focus(); return; }
+  pv.vars[i.var] = val; pvGo(i.next || cfg.start_page);
+}
+
+// ══ settings ════════════════════════════════════════════════════════════
+let settingsTab = 'general';
+function openSettings(tab) {
+  if (tab) settingsTab = tab;
+  const root = h('div', {style: 'display:flex;flex-direction:column;flex:1;min-height:0'}); const tabs = [['general', 'General'], ['bot', 'Bot & admins'], ['gate', 'Channel gate'], ['districtpics', 'District pictures'], ['currency', 'Currency'], ['referral', 'Referrals'], ['demobal', 'Demo balance'], ['payments', 'Payments'], ['adminmenu', 'Admin menu'], ['messages', 'System messages'], ['images', 'Pictures'], ['history', 'History']];
+  const body = h('div', {class: 'mb'});
+  const draw = () => {
+    root.replaceChildren(h('div', {class: 'mh'}, h('h2', {}, '⚙ Settings'), h('button', {class: 'ghost', onclick: () => { closeModal(); fullRender(); }}, 'Close')),
+      h('div', {class: 'stabs'}, tabs.map(([k, t]) => h('button', {class: settingsTab === k ? 'on' : '', onclick: () => { settingsTab = k; draw(); }}, t))), body);
+    body.replaceChildren(); ({general: sGeneral, bot: sBot, gate: sGate, districtpics: sDistrictPics, currency: sCurrency, demobal: sDemoBalance, referral: sReferral, payments: sPayments, adminmenu: sAdminMenu, messages: sMessages, images: sImages, history: sHistory})[settingsTab](body, draw);
+  };
+  closeModal(); const m = h('div', {class: 'modal', style: 'height:86vh', onclick: ev => ev.stopPropagation()}, root);
+  $('#modalRoot').append(h('div', {class: 'ov', onclick: () => { closeModal(); fullRender(); }}, m)); draw();
+}
+
+function sGeneral(b, redraw) {
+  b.append(h('h3', {style: 'margin-bottom:8px'}, 'Languages'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Users pick their language with a Language button. Every text can be translated; missing translations fall back to the default language.'));
+  Object.entries(LANG_NAMES).forEach(([l, nm]) => b.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: cfg.langs.includes(l), onchange: ev => {
+    edit(() => { if (ev.target.checked) cfg.langs.push(l); else { if (cfg.langs.length === 1) { ev.target.checked = true; return; } cfg.langs = cfg.langs.filter(x => x !== l); } if (!cfg.langs.includes(cfg.default_lang)) cfg.default_lang = cfg.langs[0]; if (!cfg.langs.includes(editLang)) editLang = cfg.default_lang; });
+    redraw(); }}), nm + ' (' + l + ')')));
+  b.append(field('Default language', sel_(cfg.langs.map(l => [l, LANG_NAMES[l] || l]), cfg.default_lang, v => edit(() => { cfg.default_lang = v; }))),
+    h('div', {class: 'hint'}, 'Shown to users who haven’t picked a language, and used when a translation is missing.'));
+  b.append(h('h3', {style: 'margin:22px 0 8px'}, 'Start screen'), field('Shown on /start', sel_(screenOptions(), cfg.start_page, v => edit(() => { cfg.start_page = v; }))));
+}
+
+function sBot(b, redraw) {
+  if (!envState) { b.append(h('div', {class: 'hint'}, 'Loading…')); return; }
+  const e = envState;
+  b.append(h('h3', {style: 'margin-bottom:8px'}, 'Bot tokens'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'One bot or several — all tokens share the same shop, users and balances. Get tokens from @BotFather.'));
+  e.tokens.forEach((t, i) => b.append(h('div', {class: 'row', style: 'margin-bottom:6px'}, h('div', {class: 'grow'}, inp(t, v => { e.tokens[i] = v.trim(); renderTop(); }, {placeholder: '123456789:AA…', onblur: () => checkTokens(redraw)})),
+    h('span', {class: 'tag ' + (e.checks && e.checks[t] ? (e.checks[t].ok ? 'g' : 'r') : '')}, e.checks && e.checks[t] ? (e.checks[t].ok ? '@' + e.checks[t].username : 'rejected') : 'unchecked'),
+    h('button', {class: 'ghost danger', onclick: () => { e.tokens.splice(i, 1); renderTop(); redraw(); }}, '✕'))));
+  b.append(h('div', {class: 'row'}, h('button', {onclick: () => { e.tokens.push(''); redraw(); }}, '＋ Add token'), h('button', {onclick: () => checkTokens(redraw, true)}, '✓ Check tokens')));
+  b.append(h('h3', {style: 'margin:22px 0 8px'}, 'Admin IDs'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Telegram user IDs that can open the in-bot admin panel and receive notifications. Find an ID with @userinfobot.'));
+  e.admins.forEach((a, i) => b.append(h('div', {class: 'row', style: 'margin-bottom:6px'}, h('div', {class: 'grow'}, inp(a, v => { e.admins[i] = v.replace(/\D/g, ''); renderTop(); }, {placeholder: '123456789'})), h('button', {class: 'ghost danger', onclick: () => { e.admins.splice(i, 1); renderTop(); redraw(); }}, '✕'))));
+  b.append(h('button', {onclick: () => { e.admins.push(''); redraw(); }}, '＋ Add admin'));
+  b.append(h('div', {class: 'hint', style: 'margin-top:20px'}, 'Token, admin and wallet changes are applied when you press Publish — the bot restarts for a few seconds. Screen changes alone go live instantly without a restart.'));
+}
+async function checkTokens(redraw, loud) {
+  const toks = envState.tokens.filter(Boolean); if (!toks.length) return;
+  try { const r = await api('/constructor/api/check-tokens', {body: {tokens: toks}}); envState.checks = envState.checks || {}; r.results.forEach(x => envState.checks[x.token] = x);
+    envState.usernames = r.results.filter(x => x.ok).map(x => x.username); if (loud) toast(r.results.every(x => x.ok) ? 'All tokens are valid' : 'Some tokens were rejected by Telegram', r.results.every(x => x.ok) ? 'ok' : 'err'); } catch (e) { toast(e.message, 'err'); }
+  if (redraw) redraw();
+}
+
+const GATE_DEFAULTS = {
+  text: {en: '👋 To continue, please join our channel, then press “Check”.', ka: '👋 გასაგრძელებლად გამოიწერეთ ჩვენი არხი, შემდეგ დააჭირეთ „შემოწმება“.', ru: '👋 Чтобы продолжить, подпишитесь на наш канал, затем нажмите «Проверить».'},
+  join_label: {en: '📢 Join channel', ka: '📢 არხზე გადასვლა', ru: '📢 Перейти в канал'},
+  check_label: {en: '✅ Check', ka: '✅ შემოწმება', ru: '✅ Проверить'},
+  fail_text: {en: '❌ You haven’t joined yet.', ka: '❌ ჯერ არ ხართ გამოწერილი.', ru: '❌ Вы ещё не подписаны.'},
+};
+function sGate(b, redraw) {
+  const on = !!(cfg.gate && cfg.gate.enabled);
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'Before anyone can use the bot, /start shows a message asking them to follow your channel. The first button opens the channel, the second one checks. Admins are never blocked.'));
+  b.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: on, onchange: ev => { edit(() => {
+    if (!cfg.gate) cfg.gate = {enabled: false, mode: 'verify', channel: '', url: '', image: '', text: {}, join_label: {}, check_label: {}, fail_text: {}};
+    cfg.gate.enabled = ev.target.checked;
+    for (const k of Object.keys(GATE_DEFAULTS)) cfg.langs.forEach(l => { if (!(cfg.gate[k][l] || '').trim()) cfg.gate[k][l] = GATE_DEFAULTS[k][l] || GATE_DEFAULTS[k].en; });
+  }); redraw(); }}), 'Ask new users to follow a channel first'));
+  if (!on) return;
+  const g = cfg.gate, lname = LANG_NAMES[editLang] || editLang;
+  b.append(h('h3', {style: 'margin:16px 0 8px'}, 'What does the check button do?'), h('div', {class: 'seg'},
+    h('div', {class: 'opt' + (g.mode !== 'dummy' ? ' on' : ''), onclick: () => { edit(() => { g.mode = 'verify'; }); redraw(); }}, h('b', {}, '🔍 Really checks'), h('span', {}, 'Asks Telegram if the user joined')),
+    h('div', {class: 'opt' + (g.mode === 'dummy' ? ' on' : ''), onclick: () => { edit(() => { g.mode = 'dummy'; }); redraw(); }}, h('b', {}, '🎭 Dummy'), h('span', {}, 'Lets everyone through after pressing it'))));
+  if (g.mode !== 'dummy') {
+    const res = h('div', {class: 'hint'}, '');
+    b.append(field('Channel to check', h('div', {class: 'row'}, h('div', {class: 'grow'}, inp(g.channel || '', v => edit(() => { g.channel = v.trim(); }, {key: 'gch'}), {placeholder: '@mychannel   or   -1001234567890'})),
+      h('button', {onclick: async () => { res.textContent = 'Checking…'; try { const r = await api(B('/api/gate-test'), {body: {channel: g.channel || ''}}); res.textContent = (r.ok ? '✓ ' : '✕ ') + r.msg; res.style.color = r.ok ? 'var(--green)' : 'var(--red)'; } catch (e) { res.textContent = e.message; } }}, 'Test'))),
+      res, h('div', {class: 'hint'}, 'The bot must be an administrator of the channel, otherwise Telegram does not let it see the members. “Test” tells you if that is the case.'));
+  }
+  b.append(field('Join link (the first button opens this)', inp(g.url || '', v => edit(() => { g.url = v.trim(); }, {key: 'gurl'}), {placeholder: 'https://t.me/mychannel'}), 'Public channel: https://t.me/name · private channel: the invite link.'));
+  b.append(h('h3', {style: 'margin:18px 0 8px'}, 'Texts'), h('div', {class: 'row', style: 'margin-bottom:8px'}, h('span', {class: 'mut', style: 'font-size:12px'}, 'Language:'), cfg.langs.map(l => h('button', {class: l === editLang ? 'primary' : 'ghost', onclick: () => { setEditLang(l); redraw(); }}, l.toUpperCase()))));
+  b.append(field('Message · ' + lname, textArea(g.text, {parse_mode: 'HTML'}, {key: 'gtext'})),
+    field('Join button · ' + lname, inp(g.join_label[editLang] || '', v => edit(() => { g.join_label[editLang] = v; }, {key: 'gjl' + editLang}))),
+    field('Check button · ' + lname, inp(g.check_label[editLang] || '', v => edit(() => { g.check_label[editLang] = v; }, {key: 'gcl' + editLang}))),
+    g.mode !== 'dummy' ? field('“Not joined yet” popup · ' + lname, inp(g.fail_text[editLang] || '', v => edit(() => { g.fail_text[editLang] = v; }, {key: 'gft' + editLang}))) : null);
+  b.append(h('h3', {style: 'margin:18px 0 8px'}, 'Picture, GIF or video (optional)'), h('div', {class: 'row'},
+    g.image ? mediaEl(g.image, {style: 'width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)'}) : h('div', {class: 'mut'}, 'Nothing attached'),
+    h('div', {class: 'grow mut', style: 'font-size:12px'}, g.image || ''),
+    h('button', {onclick: () => openImagePicker(g.image, nm => { edit(() => { g.image = nm; }); openSettings('gate'); })}, g.image ? 'Change' : 'Choose…'),
+    g.image ? h('button', {class: 'ghost', onclick: () => { edit(() => { g.image = ''; }); redraw(); }}, '✕') : null));
+  const bub = h('div', {class: 'bub', style: 'max-width:300px;margin-top:16px'});
+  if (g.image) bub.append(mediaEl(g.image));
+  const tx = h('div', {class: 'tx'}); tx.innerHTML = tgHtml(g.text[editLang] || g.text[cfg.default_lang] || '', 'HTML'); bub.append(tx);
+  const kbd = h('div', {class: 'kb'}, h('div', {class: 'kr'}, h('button', {}, g.join_label[editLang] || g.join_label[cfg.default_lang] || 'Join')), h('div', {class: 'kr'}, h('button', {}, g.check_label[editLang] || g.check_label[cfg.default_lang] || 'Check')));
+  b.append(h('div', {class: 'hint', style: 'margin-top:14px'}, 'What new users see:'), h('div', {class: 'chat', style: 'background:transparent;padding:0'}, bub, kbd));
+}
+
+function sReferral(b, redraw) {
+  const r = cfg.referral, on = !!(r && r.enabled);
+  const ensure = () => { if (!cfg.referral) cfg.referral = {enabled: false, percent: 2}; return cfg.referral; };
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'Lets users invite friends with a personal link. A friend who starts the bot through the link is tied to the person who invited them, and the inviter automatically earns a percentage of every purchase that friend makes — added straight to their balance.'));
+  b.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: on, onchange: ev => { edit(() => { ensure().enabled = ev.target.checked; }); redraw(); }}), h('b', {}, ' Referral programme')));
+  if (on) b.append(field('Inviter earns (% of each purchase)', inp(r.percent, v => edit(() => { r.percent = Math.max(0, Math.min(100, parseFloat(v) || 0)); }, {key: 'refpct'}), {type: 'number', step: '0.1', min: 0, max: 100}), 'Counted on purchases made with balance and on purchases an admin records. Each bonus is announced to the inviter.'));
+  else b.append(h('div', {class: 'hint'}, 'OFF: the link below still works as text, but nobody earns anything and new users are not linked to an inviter.'));
+  b.append(h('h3', {style: 'margin:18px 0 8px'}, 'Values for your texts'), h('div', {class: 'card'},
+    h('div', {}, h('code', {}, '{ref_link}'), ' — the user’s own invite link, e.g. https://t.me/yourbot?start=123456789'),
+    h('div', {}, h('code', {}, '{referrals}'), ' — how many users joined through it'),
+    h('div', {}, h('code', {}, '{earned}'), ' — how much they earned in total (shows the currency symbol)'),
+    h('div', {}, h('code', {}, '{ref_percent}'), ' — the percentage above')));
+  b.append(h('div', {class: 'hint', style: 'margin-top:10px'}, 'Example for a “Referral” screen:'), h('pre', {style: 'white-space:pre-wrap;background:var(--bg);padding:10px;border-radius:8px;font-size:12px'}, 'Referrals: {referrals}\nEarned: {earned}\n\nInvite new users with your unique link — you get {ref_percent}% of every purchase they make, added to your balance automatically.\n\nYour link: {ref_link}'),
+    h('div', {class: 'hint'}, 'Edit a screen’s text and use the “{ } Insert value…” menu to add any of these.'));
+}
+
+function sDemoBalance(b, redraw) {
+  const d = cfg.demo_balance, on = !!(d && d.enabled);
+  const ensure = () => { if (!cfg.demo_balance) cfg.demo_balance = {enabled: false, min: 3, max: 14}; return cfg.demo_balance; };
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'A switch that gives every user a random starting balance the first time they start the bot — with decimals, like 7.35 — in whatever currency the bot uses. It is a real balance: users can spend it (e.g. with the “Buy with balance” button).'));
+  b.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: on, onchange: ev => { edit(() => { ensure().enabled = ev.target.checked; }); redraw(); }}), h('b', {}, ' Give new users a random balance')));
+  if (!on) { b.append(h('div', {class: 'hint'}, 'OFF: balances start at 0 and only change when you set them in Global Admin or the bot’s admin menu.')); return; }
+  b.append(h('div', {class: 'row', style: 'margin-top:10px'},
+    h('div', {class: 'grow'}, field('From', inp(d.min, v => edit(() => { d.min = Math.max(0, parseFloat(v) || 0); }, {key: 'dbmin'}), {type: 'number', step: '0.01', min: 0}))),
+    h('div', {class: 'grow'}, field('To', inp(d.max, v => edit(() => { d.max = Math.max(0, parseFloat(v) || 0); }, {key: 'dbmax'}), {type: 'number', step: '0.01', min: 0})))),
+    h('div', {class: 'card', style: 'margin-top:10px'}, h('b', {}, 'Examples: '), [1, 2, 3].map(() => fmtMoney(Math.round((Math.min(d.min, d.max) + Math.random() * Math.abs(d.max - d.min)) * 100) / 100)).join('   ·   ')),
+    h('div', {class: 'hint'}, 'Given once per user, on their first /start, and only if their balance is 0 — nobody’s real money is overwritten, and users already holding a balance are left alone. Turning the switch off later does not take the balances back.'));
+}
+
+async function sDistrictPics(b, redraw) {
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'Attach a picture to each district. When a screen is set to “show the picture of the district the user picked” (e.g. the payment screen), users see the picture of the district they chose. Saved immediately — no Publish needed. The same pictures can be edited in Global Admin and in the bot’s admin menu.'));
+  let pd; try { pd = await api(B('/api/preview-data')); previewData = pd; } catch (e) { b.append(h('div', {class: 'hint'}, e.message)); return; }
+  const rows = pd.districts || [];
+  if (!rows.length) { b.append(h('div', {class: 'hint'}, 'No districts yet — add them in Global Admin → Products.')); return; }
+  const save = async (d, name) => { try { await api('/global/api/' + NAME + '/districts/image', {body: {id: d.id, image: name}, hdr: true}); toast(name ? 'Picture saved' : 'Picture removed', 'ok'); openSettings('districtpics'); } catch (e) { toast(e.message, 'err'); } };
+  rows.forEach(d => b.append(h('div', {class: 'card row'},
+    d.image ? mediaEl(d.image, {style: 'width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)'}) : h('div', {class: 'mut', style: 'width:54px;text-align:center'}, '—'),
+    h('div', {class: 'grow'}, h('b', {}, d.name), h('div', {class: 'mut', style: 'font-size:12px'}, (d.city ? d.city + ' · ' : '') + (d.image || 'no picture'))),
+    h('button', {onclick: () => openImagePicker(d.image, nm => save(d, nm))}, d.image ? 'Change' : 'Choose…'),
+    d.image ? h('button', {class: 'ghost danger', onclick: () => save(d, '')}, '✕') : null)));
+}
+
+function sCurrency(b, redraw) {
+  const c = cfg.currency, setCur = patch => edit(() => { cfg.currency = Object.assign(cfg.currency || {code: 'USD', symbol: '$', position: 'after', space: false, rate: 'auto'}, patch); });
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 12px'}, 'Prices, balances and top-up amounts are shown in this currency, e.g. 25ლ or 25.85ლ. Customers pay in crypto, converted from this currency automatically.'));
+  b.append(h('h3', {style: 'margin-bottom:8px'}, 'Pick a currency'), h('div', {style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px'},
+    CURRENCY_PRESETS.map(([code, sym]) => h('div', {class: 'opt' + (c && c.code === code ? ' on' : ''), style: 'text-align:center;padding:10px 6px', onclick: () => {
+      setCur({code, symbol: sym}); liveRate = null; redraw();
+      const n = stripMoneySigns(cfg); if (n) { touched({inspector: true}); toast(`Removed ${n} hard-coded “$” next to amounts — the currency symbol is added automatically`, 'ok'); }
+    }}, h('b', {style: 'font-size:18px'}, sym), h('span', {}, code)))));
+  if (!c) { b.append(h('div', {class: 'hint', style: 'margin-top:12px'}, 'No currency is set: amounts show as plain numbers and conversion treats them as US dollars.')); return; }
+  b.append(h('div', {class: 'row', style: 'margin-top:14px'},
+    h('div', {style: 'width:110px'}, field('Code', inp(c.code, v => setCur({code: v.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)}), {key: 'cur_code', maxlength: 3}))),
+    h('div', {style: 'width:110px'}, field('Symbol', inp(c.symbol, v => setCur({symbol: v.slice(0, 6)}), {key: 'cur_sym'}))),
+    h('div', {class: 'grow'}, field('Symbol goes', sel_([['after', 'After the number  (25ლ)'], ['before', 'Before the number  (ლ25)']], c.position, v => { setCur({position: v}); redraw(); })))),
+    h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: !!c.space, onchange: ev => { setCur({space: ev.target.checked}); redraw(); }}), 'Put a space between number and symbol'));
+  b.append(h('div', {class: 'card', style: 'margin-top:12px'}, h('b', {}, 'Preview'), h('div', {style: 'margin-top:6px;font-size:15px'}, `Balance: ${fmtMoney(25)}   ·   Price: ${fmtMoney(25.85)}   ·   Top-up: ${fmtMoney(100)}`)));
+  b.append(h('h3', {style: 'margin:20px 0 8px'}, 'Exchange rate to USD'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Needed only to work out how much crypto to ask for: price → USD → coin. “Live” follows the market automatically.'));
+  const res = h('div', {class: 'hint'}, '');
+  b.append(h('div', {class: 'seg'},
+    h('div', {class: 'opt' + (c.rate === 'auto' ? ' on' : ''), onclick: () => { setCur({rate: 'auto'}); redraw(); }}, h('b', {}, '📈 Live (recommended)'), h('span', {}, 'Updated automatically')),
+    h('div', {class: 'opt' + (c.rate !== 'auto' ? ' on' : ''), onclick: () => { setCur({rate: c.rate !== 'auto' ? c.rate : Number((liveRate && liveRate.code === c.code ? liveRate.v : 1).toFixed(4))}); redraw(); }}, h('b', {}, '🔒 Fixed'), h('span', {}, 'You set the rate yourself'))));
+  if (c.code === 'USD') b.append(h('div', {class: 'hint'}, 'US dollars need no conversion.'));
+  else if (c.rate !== 'auto') b.append(field(`1 ${c.symbol} equals … USD`, inp(c.rate, v => { const n = parseFloat(v); if (n > 0) setCur({rate: n}); }, {type: 'number', step: '0.0001', min: '0'}), `So ${fmtMoney(100)} = ${(100 * Number(c.rate || 0)).toFixed(2)} USD before conversion to crypto.`));
+  else b.append(h('div', {class: 'row'}, h('button', {onclick: async () => { res.textContent = 'Checking…'; const r = await refreshLiveRate(); res.textContent = r ? (r.ok ? '✓ ' : '✕ ') + r.msg : 'Could not reach the rate service'; res.style.color = r && r.ok ? 'var(--green)' : 'var(--red)'; }}, 'Check live rate'), res));
+  b.append(h('div', {class: 'card', style: 'margin-top:16px;border-color:var(--yellow)'}, h('b', {}, '⚠ Existing prices are not converted'),
+    h('div', {class: 'hint', style: 'margin:6px 0 0'}, 'Changing the currency only changes the symbol and the conversion. A product priced 25 stays 25 — in the new currency. Edit prices in Global Admin → Products. Balances work the same way.')));
+  b.append(h('div', {class: 'row', style: 'margin-top:12px'}, h('button', {onclick: () => { let n = 0; edit(() => { n = stripMoneySigns(cfg); }, {inspector: true}); toast(n ? `Removed ${n} hard-coded “$” next to amounts` : 'No hard-coded “$” signs found next to amounts', n ? 'ok' : ''); }}, 'Clean up “$” in my texts'),
+    h('button', {class: 'ghost danger', onclick: () => { edit(() => { delete cfg.currency; }); redraw(); }}, 'Remove currency')),
+    h('div', {class: 'hint'}, 'Texts like “Price: {price} $” would show the symbol twice, so “$” right after an amount is removed automatically when you pick a currency. You can use {balance}, {price}, {amount} anywhere — {balance_num} gives the bare number.'));
+}
+
+function coinList() { if (!cfg.payments.coins) cfg.payments.coins = clone(DEFAULT_COINS); return cfg.payments.coins; }
+function sPayments(b, redraw) {
+  const coins = coinList();
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'Coins offered for balance top-ups and orders. Amounts are converted at the live CoinGecko rate (stablecoins are 1:1 with USD). Users send funds to the wallet address you enter here.'));
+  const t = h('table', {class: 't'}, h('tr', {}, ['On', 'Code', 'Shown as', 'Wallet address', 'CoinGecko id', 'Stable', ''].map(x => h('th', {}, x))));
+  coins.forEach((c, i) => t.append(h('tr', {},
+    h('td', {}, h('input', {type: 'checkbox', checked: c.enabled !== false, style: 'width:auto', onchange: ev => edit(() => { c.enabled = ev.target.checked; })})),
+    h('td', {style: 'width:80px'}, inp(c.code, v => edit(() => { const old = c.code; c.code = v.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (envState && old !== c.code && envState.wallets[old] !== undefined && !envState.wallets[c.code]) { envState.wallets[c.code] = envState.wallets[old]; } if (KNOWN_COINS[c.code] && !c.cg_id) c.cg_id = KNOWN_COINS[c.code]; }, {key: 'cc' + i}))),
+    h('td', {}, inp(c.label, v => edit(() => { c.label = v; }, {key: 'cl' + i}))),
+    h('td', {}, inp((envState && envState.wallets[c.code]) || '', v => { if (!envState) return; envState.wallets[c.code] = v.replace(/\s/g, ''); renderTop(); }, {placeholder: 'wallet address'})),
+    h('td', {style: 'width:130px'}, inp(c.cg_id || '', v => edit(() => { c.cg_id = v.toLowerCase().replace(/[^a-z0-9\-]/g, ''); }, {key: 'cg' + i}), {placeholder: c.stable ? '(not needed)' : 'bitcoin'})),
+    h('td', {}, h('input', {type: 'checkbox', checked: !!c.stable, style: 'width:auto', onchange: ev => edit(() => { c.stable = ev.target.checked; })})),
+    h('td', {}, h('button', {class: 'ghost danger', onclick: () => { edit(() => { coins.splice(i, 1); }); redraw(); }}, '✕')))));
+  b.append(t, h('div', {class: 'row', style: 'margin-top:12px'}, h('button', {onclick: () => { edit(() => { coins.push({code: 'ETH', label: 'Ethereum', cg_id: 'ethereum', stable: false, enabled: true}); }); redraw(); }}, '＋ Add coin')));
+  b.append(h('div', {class: 'hint', style: 'margin-top:12px'}, 'Tip: for a coin CoinGecko knows (BTC, LTC, ETH, TRX, TON, SOL, DOGE, XRP, BNB, BCH) the id fills in by itself. Other coins need their CoinGecko id (see coingecko.com → the coin’s “API id”). Automatic deposit detection is only available for BTC, LTC and USDT; other coins are confirmed by you through the “I paid” button.'));
+}
+
+function sAdminMenu(b) {
+  const hidden = new Set(cfg.admin_menu.hidden || []);
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'Choose which features show up in the bot’s in-Telegram admin menu. Hidden features stay available in the web Global Admin.'));
+  ADMIN_ITEMS.forEach(([k, nm]) => b.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: !hidden.has(k), onchange: ev => edit(() => { const s = new Set(cfg.admin_menu.hidden || []); if (ev.target.checked) s.delete(k); else s.add(k); cfg.admin_menu.hidden = [...s]; })}), nm)));
+}
+
+function sMessages(b, redraw) {
+  const keys = Object.keys(sysStrings).filter(k => Object.keys(sysStrings[k]).some(l => typeof sysStrings[k][l] === 'string'));
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Built-in messages the bot sends outside your screens (order confirmation, product details, balance, referral, language picker…). Edit one to override it; clear the box to go back to the default. Keep {placeholders} as they are. Editing language: ', h('b', {}, LANG_NAMES[editLang] || editLang)));
+  const q = h('input', {placeholder: 'Search…', style: 'margin-bottom:10px'}); b.append(q);
+  const list = h('div'); b.append(list);
+  const draw = () => {
+    list.replaceChildren(); const term = q.value.toLowerCase();
+    keys.filter(k => !term || k.toLowerCase().includes(term) || (sysStrings[k][editLang] || sysStrings[k].ka || '').toLowerCase().includes(term)).forEach(k => {
+      const def = sysStrings[k][editLang] ?? sysStrings[k].ka ?? sysStrings[k].en ?? '', ov = (cfg.strings[k] || {})[editLang] || '';
+      list.append(h('div', {class: 'card'}, h('div', {class: 'row'}, h('b', {style: 'font-size:12px'}, k), ov ? h('span', {class: 'tag y'}, 'edited') : null, h('span', {class: 'grow'}),
+        ov ? h('button', {class: 'ghost', onclick: () => { edit(() => { delete cfg.strings[k][editLang]; if (!Object.keys(cfg.strings[k]).length) delete cfg.strings[k]; }); draw(); }}, 'Reset') : null),
+        (() => { const ta = h('textarea', {placeholder: def, style: 'min-height:54px;margin-top:6px', oninput: ev => { edit(() => { if (ev.target.value) (cfg.strings[k] = cfg.strings[k] || {})[editLang] = ev.target.value; else if (cfg.strings[k]) { delete cfg.strings[k][editLang]; if (!Object.keys(cfg.strings[k]).length) delete cfg.strings[k]; } }, {key: 'ss' + k + editLang}); }}); ta.value = ov; return ta; })()));
     });
-    if(page.type==="list") kb = `<div class="tg-kb-row"><div class="tg-key">… ${esc(page.source||'products')} (auto from data)</div></div>` + kb;
-    if(page.show_admin_button) kb += `<div class="tg-kb-row"><div class="tg-key">⚙ ადმინ პანელი</div></div>`;
-    const photo = page.image
-        ? `<img class="tg-photo" src="/bot/${BOT_NAME}/api/image/${encodeURIComponent(page.image)}" onerror="this.replaceWith(document.createTextNode(''))">`
-        : `<div class="tg-photo">no image</div>`;
-    el.innerHTML = `${photo}<div class="tg-caption">${esc(cap)||"<i>no text</i>"}</div><div class="tg-kb">${kb}</div>`;
+    if (!list.children.length) list.append(h('div', {class: 'hint'}, keys.length ? 'Nothing matches.' : 'This bot has no editable system messages.'));
+  };
+  q.oninput = draw; draw();
 }
 
-/* ── mutations ── */
-function setText(v){ ensureObj(config.pages[currentPage],"text"); config.pages[currentPage].text[currentLang]=v; renderPreview(); }
-function setImage(v){ config.pages[currentPage].image=v; renderPreview(); }
-function setAdmin(v){ config.pages[currentPage].show_admin_button=v; renderPreview(); }
-function setLabel(ri,bi,v){ const b=config.pages[currentPage].rows[ri][bi]; ensureObj(b,"label"); b.label[currentLang]=v; renderPreview(); }
-
-function setActionType(ri,bi,t){
-    const b = config.pages[currentPage].rows[ri][bi];
-    const fp = config.start_page||Object.keys(config.pages)[0];
-    if(t==="page") b.action = "page:"+fp;
-    else if(t==="choose") b.action = "choose:crypto:LTC:"+fp;
-    else if(t==="confirm") b.action = "confirm:"+fp;
-    else if(t==="builtin") b.action = "builtin:"+BUILTINS[0].key;
-    else if(t==="url") b.action = "url:https://";
-    else b.action = "noop";
-    renderRows(); renderPreview();
-}
-function setAction(ri,bi,t,val){
-    const b = config.pages[currentPage].rows[ri][bi];
-    b.action = t==="noop" ? "noop" : t+":"+val;
-    renderPreview();
-}
-function setConfirm(ri,bi,page){ config.pages[currentPage].rows[ri][bi].action = "confirm:"+page; renderPreview(); }
-function setChoose(ri,bi,field,val){
-    const b = config.pages[currentPage].rows[ri][bi];
-    const a = parseAction(b.action);
-    let v = a.var||"crypto", value = a.value||"LTC", page = a.page||(config.start_page||Object.keys(config.pages)[0]);
-    if(field==='var') v = val.replace(/[^a-zA-Z0-9_]/g,'');
-    if(field==='value') value = val.replace(/[^a-zA-Z0-9_.\-]/g,'');
-    if(field==='page') page = val;
-    b.action = "choose:"+(v||"crypto")+":"+(value||"x")+":"+page;
-    renderPreview();
-}
-function setStyle(ri,bi,v){
-    const b = config.pages[currentPage].rows[ri][bi];
-    if(v) b.style = v; else delete b.style;
-    renderPreview();
+function sImages(b, redraw) {
+  b.append(dropZone(redraw), h('div', {class: 'hint', style: 'margin:-4px 0 10px'}, 'Pictures, GIFs and videos can be used on any screen. Deleting is blocked while a screen still uses the picture.'),
+    imageGrid('', null, async nm => { if (!confirm('Delete ' + nm + '?')) return; try { await api(B('/api/images/' + encodeURIComponent(nm)), {method: 'DELETE'}); await loadImages(); redraw(); } catch (e) { toast(e.message, 'err'); } }));
 }
 
-function addRow(){ config.pages[currentPage].rows.push([newButton()]); renderRows(); renderPreview(); }
-function deleteRow(ri){ config.pages[currentPage].rows.splice(ri,1); renderRows(); renderPreview(); }
-function moveRow(ri,dir){
-    const rows=config.pages[currentPage].rows; const j=ri+dir;
-    if(j<0||j>=rows.length) return;
-    [rows[ri],rows[j]]=[rows[j],rows[ri]]; renderRows(); renderPreview();
-}
-function addButton(ri){ config.pages[currentPage].rows[ri].push(newButton()); renderRows(); renderPreview(); }
-function deleteButton(ri,bi){
-    const rows=config.pages[currentPage].rows;
-    rows[ri].splice(bi,1);
-    if(rows[ri].length===0) rows.splice(ri,1);
-    renderRows(); renderPreview();
-}
-function moveBtnH(ri,bi,dir){
-    const row=config.pages[currentPage].rows[ri]; const j=bi+dir;
-    if(j<0||j>=row.length) return;
-    [row[bi],row[j]]=[row[j],row[bi]]; renderRows(); renderPreview();
-}
-function moveBtnV(ri,bi,dir){
-    const rows=config.pages[currentPage].rows;
-    const btn=rows[ri][bi];
-    let tr=ri+dir;
-    if(tr<0){ rows.unshift([]); tr=0; ri=1; }
-    else if(tr>=rows.length){ rows.push([]); tr=rows.length-1; }
-    rows[ri].splice(bi,1);
-    rows[tr].push(btn);
-    // clean empty rows
-    for(let i=rows.length-1;i>=0;i--) if(rows[i].length===0) rows.splice(i,1);
-    renderRows(); renderPreview();
+async function sHistory(b, redraw) {
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'Every Publish keeps the previous version here. Loading one puts it in the editor — nothing goes live until you Publish.'));
+  try {
+    const r = await api(B('/api/history'));
+    if (!r.items.length) b.append(h('div', {class: 'hint'}, 'No earlier versions yet.'));
+    r.items.forEach(it => { const d = it.id.replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)$/, '$1-$2-$3 $4:$5:$6');
+      b.append(h('div', {class: 'card row'}, h('b', {class: 'grow'}, d), h('span', {class: 'mut'}, it.pages + ' screens'), h('button', {onclick: async () => {
+        if (!confirm('Load the version from ' + d + ' into the editor?')) return;
+        try { const c = await api(B('/api/history/' + it.id)); snapshot(); cfg = normalize(c); autoPosition(); sel = null; closeModal(); fullRender(); toast('Loaded — press Publish to make it live', 'ok'); } catch (e) { toast(e.message, 'err'); } }}, 'Load'))); });
+  } catch (e) { b.append(h('div', {class: 'hint'}, e.message)); }
 }
 
-function newButton(){ const p={}; p[currentLang]="Button"; return {label:p, action:"noop"}; }
-
-/* ── page ops ── */
-function addPage(){
-    let base="page", i=1, id;
-    do { id=base+i; i++; } while(id in config.pages);
-    const t={}; config.langs.forEach(l=>t[l]="");
-    config.pages[id]={image:"",parse_mode:"HTML",show_admin_button:false,text:t,rows:[]};
-    currentPage=id; renderAll();
-}
-function renamePage(){
-    const nid=document.getElementById("pgId").value.trim();
-    if(!/^[a-z0-9_]{1,40}$/.test(nid)){ toast("id: a-z 0-9 _ only",false); return; }
-    if(nid===currentPage) return;
-    if(nid in config.pages){ toast("id already exists",false); return; }
-    config.pages[nid]=config.pages[currentPage];
-    delete config.pages[currentPage];
-    // repoint references
-    Object.values(config.pages).forEach(pg=>pg.rows.forEach(r=>r.forEach(b=>{
-        if(b.action==="page:"+currentPage) b.action="page:"+nid;
-    })));
-    if(config.start_page===currentPage) config.start_page=nid;
-    currentPage=nid; renderAll(); toast("renamed");
-}
-function setStart(){ config.start_page=currentPage; renderAll(); toast("start page set"); }
-function deletePage(){
-    if(Object.keys(config.pages).length<=1){ toast("need at least one page",false); return; }
-    if(currentPage===config.start_page){ toast("can't delete START page",false); return; }
-    if(!confirm("Delete page '"+currentPage+"'?")) return;
-    delete config.pages[currentPage];
-    currentPage=config.start_page;
-    renderAll();
+// ══ publish ═════════════════════════════════════════════════════════════
+async function publish() {
+  const errs = computeIssues().filter(i => i.level === 'error');
+  if (errs.length) { toast(`Fix ${errs.length} problem(s) first`, 'err'); showIssues(); return; }
+  const btn = $('#publishBtn'); btn.disabled = true; btn.textContent = 'Publishing…';
+  try {
+    const needRestart = dirtyEnv();
+    if (needRestart && !confirm('Token / admin / wallet changes restart the bot for a few seconds. Continue?')) { btn.disabled = false; btn.textContent = 'Publish'; return; }
+    if (dirtyCfg()) { await api(B('/api/menu-config'), {body: cfg}); publishedStr = JSON.stringify(cfg); }
+    if (needRestart) {
+      await api(B('/api/env'), {body: {tokens: envState.tokens.filter(Boolean), admins: envState.admins.filter(Boolean), wallets: envState.wallets}});
+      await api(B('/api/restart'), {method: 'POST', body: {}}); envOrig = JSON.stringify(envState);
+    }
+    try { localStorage.removeItem('cx-draft-' + NAME); } catch (e) {}
+    toast(needRestart ? 'Published and bot restarted ✓' : 'Published — your bot is updated ✓', 'ok');
+  } catch (e) { toast('Publish failed: ' + e.message, 'err'); }
+  btn.disabled = false; btn.textContent = 'Publish'; renderTop();
 }
 
-/* ── save ── */
-async function saveConfig(restart){
-    const r = await api("/api/menu-config", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify(config)
-    });
-    const j = await r.json();
-    if(!r.ok){ toast(j.error||"save failed",false); return; }
-    if(restart){ await doRestart(); } else { toast("saved ✓"); }
+// ══ boot ════════════════════════════════════════════════════════════════
+function fullRender() { renderTop(); renderCanvas(); renderInspector(); renderPreview(); }
+async function boot() {
+  setupCanvasEvents();
+  const [c, env, ss, pd] = await Promise.all([api(B('/api/menu-config')), api(B('/api/env')).catch(() => null), api(B('/api/system-strings')).catch(() => ({strings: {}})), api(B('/api/preview-data')).catch(() => previewData), loadImages()]);
+  cfg = normalize(c.config || c); sysStrings = ss.strings || {}; previewData = pd;
+  autoPosition(true);
+  publishedStr = JSON.stringify(cfg);
+  refreshLiveRate().then(() => renderPreview());
+  envState = env ? {tokens: env.tokens || [], admins: env.admins || [], wallets: Object.assign({BTC: '', LTC: '', USDT: ''}, env.wallets || {})} : {tokens: [], admins: [], wallets: {}};
+  envOrig = JSON.stringify(envState);
+  editLang = cfg.default_lang;
+  try {
+    const draft = localStorage.getItem('cx-draft-' + NAME);
+    if (draft && draft !== JSON.stringify(cfg) && confirm('You have unpublished changes from your last visit. Restore them?')) { cfg = normalize(JSON.parse(draft)); autoPosition(true); } else localStorage.removeItem('cx-draft-' + NAME);
+  } catch (e) {}
+  sel = null; pv.page = cfg.start_page; selectPage(cfg.start_page);
+  fullRender(); fitView(); checkTokens(null);
+  if (cfg.pages[cfg.start_page] && Object.keys(cfg.pages).length === 1 && !cfg.pages[cfg.start_page].rows.length) $('#tips').textContent = 'Start here: write your welcome text on the right, then add buttons — each can open a new screen.';
 }
-async function doRestart(){
-    const r = await api("/api/restart",{method:"POST"});
-    const j = await r.json();
-    if(r.ok) toast("saved & restarted ✓"); else toast(j.error||"restart failed",false);
-}
-
-/* ── image upload ── */
-document.getElementById("imgUpload").addEventListener("change", async function(){
-    if(!this.files.length) return;
-    const fd = new FormData(); fd.append("file", this.files[0]);
-    const r = await api("/api/images",{method:"POST", body:fd});
-    const j = await r.json();
-    if(!r.ok){ toast(j.error||"upload failed",false); return; }
-    await loadImages();
-    config.pages[currentPage].image = j.name;
-    renderEditor(); renderPreview(); toast("image uploaded");
-    this.value="";
+$('#publishBtn').onclick = publish; $('#settingsBtn').onclick = () => openSettings(); $('#issuesBtn').onclick = showIssues;
+$('#undoBtn').onclick = undo; $('#redoBtn').onclick = redo;
+$('#phoneBtn').onclick = () => { showPhone = !showPhone; renderPreview(); };
+addEventListener('keydown', ev => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName);
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); publish(); }
+  else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z' && !typing) { ev.preventDefault(); ev.shiftKey ? redo() : undo(); }
+  else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y' && !typing) { ev.preventDefault(); redo(); }
+  else if (ev.key === 'Escape') closeModal();
 });
-
-/* ── env tab ── */
-let envState = {tokens:[], admins:[], btc:"", ltc:"", usdt:""};
-async function loadEnv(){
-    try{
-        const r = await api("/api/env"); envState = await r.json();
-    }catch(e){}
-    renderEnv();
-}
-function renderEnv(){
-    const tl=document.getElementById("tokenList"); tl.innerHTML="";
-    (envState.tokens.length?envState.tokens:[""]).forEach((tok,i)=>{
-        const d=document.createElement("div"); d.className="cx-token-row";
-        d.innerHTML=`<input class="cx-input" value="${esc(tok)}" placeholder="123456:AA..." oninput="envState.tokens[${i}]=this.value">
-                     <button class="cx-mini" style="color:var(--red)" onclick="delToken(${i})">✕</button>`;
-        tl.appendChild(d);
-    });
-    if(!envState.tokens.length) envState.tokens=[""];
-
-    const al=document.getElementById("adminList"); al.innerHTML="";
-    (envState.admins.length?envState.admins:[""]).forEach((a,i)=>{
-        const d=document.createElement("div"); d.className="cx-token-row";
-        d.innerHTML=`<input class="cx-input" value="${esc(a)}" placeholder="Telegram user ID" oninput="envState.admins[${i}]=this.value">
-                     <button class="cx-mini" style="color:var(--red)" onclick="delAdmin(${i})">✕</button>`;
-        al.appendChild(d);
-    });
-    if(!envState.admins.length) envState.admins=[""];
-
-    document.getElementById("wBtc").value=envState.btc||"";
-    document.getElementById("wLtc").value=envState.ltc||"";
-    document.getElementById("wUsdt").value=envState.usdt||"";
-}
-function addToken(){ envState.tokens.push(""); renderEnv(); }
-function delToken(i){ envState.tokens.splice(i,1); renderEnv(); }
-function addAdmin(){ envState.admins.push(""); renderEnv(); }
-function delAdmin(i){ envState.admins.splice(i,1); renderEnv(); }
-async function saveEnv(restart){
-    envState.btc=document.getElementById("wBtc").value;
-    envState.ltc=document.getElementById("wLtc").value;
-    envState.usdt=document.getElementById("wUsdt").value;
-    const body={
-        tokens: envState.tokens.filter(t=>t.trim()),
-        admins: envState.admins.filter(a=>a.trim()),
-        btc:envState.btc, ltc:envState.ltc, usdt:envState.usdt
-    };
-    const r=await api("/api/env",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    const j=await r.json();
-    if(!r.ok){ toast(j.error||"save failed",false); return; }
-    if(restart){ await doRestart(); } else { toast("env saved ✓"); }
-}
-
-/* ── tabs ── */
-function cxTab(t){
-    document.querySelectorAll(".cx-tab").forEach(x=>x.classList.toggle("active", x.dataset.tab===t));
-    document.getElementById("tab-menu").style.display = t==="menu"?"":"none";
-    document.getElementById("tab-env").style.display = t==="env"?"":"none";
-}
-
-/* ── helpers ── */
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function pickText(field, lang){
-    if(field==null) return "";
-    if(typeof field==="string") return field;
-    return field[lang] || field[config.default_lang] || Object.values(field)[0] || "";
-}
-function ensureObj(o,k){ if(typeof o[k]!=="object"||o[k]==null){ const v=o[k]; o[k]={}; if(typeof v==="string") o[k][config.default_lang]=v; } }
-function parseAction(a){
-    a=a||"noop";
-    if(a.startsWith("page:"))    return {type:"page", page:a.slice(5)};
-    if(a.startsWith("builtin:")) return {type:"builtin", value:a.slice(8)};
-    if(a.startsWith("url:"))     return {type:"url", url:a.slice(4)};
-    if(a.startsWith("confirm:")) return {type:"confirm", page:a.slice(8)};
-    if(a.startsWith("choose:")){ const p=a.split(":");
-        return {type:"choose", var:p[1]||"", value:p[2]||"", page:p.slice(3).join(":")||""}; }
-    return {type:"noop"};
-}
-const STYLE_EMOJI = {green:"🟢 ", red:"🔴 ", check:"✅ ", cross:"❌ "};
-function renderVars(t){
-    return String(t||"").replace(/\{(\w+)\}/g, (m,k)=>({
-        balance:"0", bot_username:"your_bot", user_id:"123456", referrals:"0", earned:"0.0"
-    }[k] ?? m));
-}
-
-boot();
+addEventListener('beforeunload', ev => { if (cfg && dirty()) { ev.preventDefault(); ev.returnValue = ''; } });
+boot().catch(e => { document.body.prepend(h('div', {style: 'padding:30px;color:var(--red)'}, 'Could not load the builder: ' + e.message)); });
 </script>
 {% endraw %}
-{% endblock %}
+</body>
+</html>

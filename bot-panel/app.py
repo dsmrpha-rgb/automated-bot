@@ -666,5 +666,23 @@ except Exception as _e:  # never let the constructor break the panel
     _logging.getLogger(__name__).warning("Constructor blueprint not loaded: %s", _e)
 
 
+# ── Global Admin blueprint (users / products / announcements for all bots) ──
+try:
+    from global_admin import global_bp
+    app.register_blueprint(global_bp)
+except Exception as _e:  # never let it break the panel
+    import logging as _logging
+    _logging.getLogger(__name__).warning("Global admin blueprint not loaded: %s", _e)
+
+
+# ── Site file manager (storefront + nes666.tech web roots) ──
+try:
+    from site_files import files_bp
+    app.register_blueprint(files_bp)
+except Exception as _e:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("Site files blueprint not loaded: %s", _e)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=False)

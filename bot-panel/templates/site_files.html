@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Site Files — Bot Panel{% endblock %}
+{% block content %}
+<style>
+ .sf-top{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+ .sf-top select,.sf-top input[type=text]{background:var(--bg3);border:1px solid var(--border);color:inherit;border-radius:8px;padding:7px 10px;font:inherit}
+ .sf-crumb{font-family:ui-monospace,monospace;font-size:13px;margin:0 0 10px;word-break:break-all}
+ .sf-crumb a{color:#6f93f7;cursor:pointer}
+ .sf-list a.row{display:grid;grid-template-columns:24px 1fr 80px 140px auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--border);color:inherit;text-decoration:none;cursor:pointer}
+ .sf-list a.row:hover{background:var(--bg3)}
+ .sf-list .m{color:#8b93a7;font-size:12px}
+ .sf-list .act button{background:none;border:0;color:#8b93a7;cursor:pointer;font-size:14px;padding:2px 5px}
+ .sf-list .act button:hover{color:#fff}
+ #sfEd{display:none}
+ #sfEd textarea{width:100%;min-height:60vh;background:#0b0e14;color:#e8eefb;border:1px solid var(--border);border-radius:8px;padding:12px;font:13px/1.5 ui-monospace,monospace;tab-size:4;resize:vertical}
+ #sfDrop{border:2px dashed var(--border);border-radius:10px;padding:12px;text-align:center;color:#8b93a7;margin-top:12px;font-size:13px}
+ #sfDrop.on{border-color:#6f93f7;color:#fff}
+ #sfMsg{font-size:13px;margin-left:6px}
+ @media(max-width:640px){.sf-list a.row{grid-template-columns:24px 1fr auto}.sf-list .m{display:none}}
+</style>
+<div class="page-header"><h1>🗂 Site Files</h1></div>
+<div class="card" style="padding:16px">
+ <div class="sf-top">
+  <select id="sfRoot">{% for k,v in roots.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+  <button class="btn btn-ghost btn-sm" onclick="sfNew(false)">+ File</button>
+  <button class="btn btn-ghost btn-sm" onclick="sfNew(true)">+ Folder</button>
+  <label class="btn btn-ghost btn-sm" style="cursor:pointer">⬆ Upload<input type="file" id="sfUp" multiple hidden></label>
+  <button class="btn btn-ghost btn-sm" id="sfRestart" style="display:none" onclick="sfRestart()">↻ Restart site</button>
+  <span id="sfMsg"></span>
+ </div>
+ <div class="sf-crumb" id="sfCrumb"></div>
+ <div id="sfListWrap"><div class="sf-list" id="sfList"></div><div id="sfDrop">Drop files here to upload into this folder</div></div>
+ <div id="sfEd">
+  <div class="sf-top"><b id="sfEdName"></b><button class="btn btn-sm" onclick="sfSave()">Save (Ctrl+S)</button><button class="btn btn-ghost btn-sm" onclick="sfClose()">Close</button></div>
+  <textarea id="sfText" spellcheck="false"></textarea>
+ </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let root=$('sfRoot').value, dir='', cur='';
+const H={'X-Requested-With':'site-files','Content-Type':'application/json'};
+const msg=(t,bad)=>{const m=$('sfMsg');m.textContent=t;m.style.color=bad?'#ff6b7d':'#5fe3d3';if(t)setTimeout(()=>{if(m.textContent===t)m.textContent=''},4000)};
+async function call(ep,body,raw){
+  const url=`/sitefiles/api/${root}/${ep}`;
+  const r=await fetch(url,raw?{method:'POST',headers:{'X-Requested-With':'site-files'},body}:{method:'POST',headers:H,body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({error:'bad response'}));
+  if(!r.ok) throw new Error(j.error||r.status);
+  return j;
+}
+const join=(a,b)=>a?a+'/'+b:b, esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+async function load(){
+  try{
+    const r=await fetch(`/sitefiles/api/${root}/list?path=${encodeURIComponent(dir)}`);const j=await r.json();
+    if(!r.ok) throw new Error(j.error);
+    $('sfRestart').style.display=j.service?'':'none';
+    const parts=dir?dir.split('/'):[];let acc='';
+    $('sfCrumb').innerHTML='<a onclick="go(\'\')">/</a>'+parts.map(p=>{acc=join(acc,p);return ` <a onclick="go('${acc.replace(/'/g,"\\'")}')">${esc(p)}</a> /`}).join('');
+    let h=dir?`<a class="row" onclick="go('${parts.slice(0,-1).join('/')}')"><span>⬆</span><span>..</span><span></span><span></span><span></span></a>`:'';
+    h+=j.items.map(i=>{const p=join(dir,i.name).replace(/'/g,"\\'");
+      return `<a class="row" onclick="${i.dir?`go('${p}')`:i.text?`edit('${p}')`:`dl('${p}',${i.image})`}"><span>${i.dir?'📁':i.image?'🖼':i.text?'📄':'📦'}</span><span>${esc(i.name)}</span><span class="m">${i.dir?'':fmt(i.size)}</span><span class="m">${new Date(i.mtime*1000).toLocaleString()}</span><span class="act" onclick="event.stopPropagation()">${i.dir?'':`<button title="Download" onclick="dl('${p}',false,true)">⬇</button>`}<button title="Rename" onclick="ren('${p}')">✎</button><button title="Delete" onclick="del('${p}',${i.dir})">🗑</button></span></a>`}).join('');
+    $('sfList').innerHTML=h||'<div class="m" style="padding:14px">Empty folder</div>';
+  }catch(e){msg(e.message,1)}
+}
+function go(p){dir=p;sfClose();load()}
+function dl(p,img,force){window.open(`/sitefiles/api/${root}/raw?path=${encodeURIComponent(p)}${force?'&dl=1':''}`,'_blank')}
+async function edit(p){try{
+  const r=await fetch(`/sitefiles/api/${root}/read?path=${encodeURIComponent(p)}`);const j=await r.json();if(!r.ok)throw new Error(j.error);
+  cur=p;$('sfText').value=j.content;$('sfEdName').textContent=p;$('sfEd').style.display='block';$('sfListWrap').style.display='none';
+}catch(e){msg(e.message,1)}}
+function sfClose(){$('sfEd').style.display='none';$('sfListWrap').style.display='';cur=''}
+async function sfSave(){try{await call('write',{path:cur,content:$('sfText').value});msg('Saved ✓ (previous version backed up)')}catch(e){msg(e.message,1)}}
+async function sfNew(folder){const n=prompt(folder?'Folder name:':'File name (e.g. notes.txt):');if(!n)return;
+  try{if(folder)await call('mkdir',{path:join(dir,n)});else{await call('write',{path:join(dir,n),content:''});}await load();if(!folder)edit(join(dir,n))}catch(e){msg(e.message,1)}}
+async function ren(p){const n=prompt('New path (relative to site root):',p);if(!n||n===p)return;try{await call('rename',{path:p,to:n});load()}catch(e){msg(e.message,1)}}
+async function del(p,isDir){if(!confirm(`Delete ${p}${isDir?' and everything inside it':''}?`))return;try{await call('delete',{path:p});load()}catch(e){msg(e.message,1)}}
+async function upload(files){if(!files.length)return;const fd=new FormData();fd.append('path',dir);[...files].forEach(f=>fd.append('files',f));
+  try{const j=await call('upload',fd,true);msg(`Uploaded ${j.uploaded} file(s) ✓`);load()}catch(e){msg(e.message,1)}}
+async function sfRestart(){if(!confirm('Restart the website service now?'))return;try{await call('restart',{});msg('Site restarted ✓')}catch(e){msg(e.message,1)}}
+$('sfRoot').onchange=e=>{root=e.target.value;dir='';sfClose();load()};
+$('sfUp').onchange=e=>{upload(e.target.files);e.target.value=''};
+const dz=$('sfDrop');['dragenter','dragover'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add('on')}));
+['dragleave','drop'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove('on')}));
+dz.addEventListener('drop',e=>upload(e.dataTransfer.files));
+$('sfText').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();sfSave()}
+  if(e.key==='Tab'){e.preventDefault();const t=e.target,s=t.selectionStart;t.value=t.value.slice(0,s)+'    '+t.value.slice(t.selectionEnd);t.selectionStart=t.selectionEnd=s+4}});
+load();
+</script>
+{% endblock %}

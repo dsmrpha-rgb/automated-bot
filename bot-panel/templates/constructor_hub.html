@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Bot Constructor — Bot Panel{% endblock %}
+{% block content %}
+<style>
+.hub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;margin-top:18px}
+.hub-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.hub-card h3{font-size:17px}.hub-card .meta{color:var(--text2);font-size:13px}
+.hub-card.new{border-style:dashed;align-items:center;justify-content:center;text-align:center;min-height:150px;text-decoration:none;color:var(--text)}
+.hub-card.new:hover{border-color:var(--accent2);background:rgba(108,92,231,.08)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--text2)}
+.dot.active{background:var(--green)}.dot.failed{background:var(--red)}
+</style>
+<div class="page-header"><h1>🧩 Bot Constructor</h1><a href="/constructor/new" class="btn btn-primary">＋ Create a new bot</a></div>
+<p style="color:var(--text2);max-width:720px">Build shop bots visually: lay out screens, wire buttons, set languages, payments and the admin menu. Every bot made here is managed from the same <a href="/global" style="color:var(--accent2)">Global Admin</a> — users, products, announcements and private listings work automatically.</p>
+<div class="hub-grid">
+  {% for b in bots %}
+  <div class="hub-card">
+    <h3>{{ b.display }}</h3>
+    <div class="meta"><span class="dot {{ b.state }}"></span>{{ 'Running' if b.state == 'active' else ('Stopped' if b.state in ('inactive','failed') else b.state) }} · {{ b.pages }} screens</div>
+    <div style="display:flex;gap:8px;margin-top:auto">
+      <a class="btn btn-primary btn-sm" href="/bot/{{ b.name }}/constructor">Open builder</a>
+      <a class="btn btn-ghost btn-sm" href="/global">Global Admin</a>
+    </div>
+  </div>
+  {% endfor %}
+  <a class="hub-card new" href="/constructor/new"><div style="font-size:34px">＋</div><b>Create a new bot</b><span class="meta">Guided setup in about a minute</span></a>
+</div>
+{% endblock %}
