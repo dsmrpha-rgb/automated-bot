@@ -48,6 +48,7 @@
   <button class="ga-tab" data-t="users">Users</button>
   <button class="ga-tab" data-t="products">Products</button>
   <button class="ga-tab" data-t="announce">Announcements</button>
+  <button class="ga-tab" data-t="dm">Private message</button>
   <button class="ga-tab" data-t="private">Private listings</button>
   <button class="ga-tab" data-t="maint">Scan &amp; Clean</button>
 </div>
@@ -132,6 +133,23 @@
     <button class="btn btn-primary" id="asend">Send / Schedule</button>
   </div>
   <div class="card"><h2>Scheduled</h2><div id="sched"></div></div>
+</div>
+
+<div id="p-dm" hidden>
+  <div class="card">
+    <h2>Private message by user ID</h2>
+    <p class="ga-small" style="margin-bottom:10px">Sent from the bot selected at the top: <b id="dmbot">—</b>. The user must have started that bot. Each of the bot's tokens is tried in order until one reaches the user, so nobody gets a duplicate.</p>
+    <span class="ga-label">Telegram user ID(s) — separated by commas or spaces (max 100)</span>
+    <textarea class="ga-ta" id="dmids" style="min-height:60px" placeholder="123456789, 987654321"></textarea>
+    <span class="ga-label">Message</span>
+    <textarea class="ga-ta" id="dmtext" placeholder="Message text..."></textarea>
+    <label class="ga-chk"><input type="checkbox" id="dmhtml"> Format as HTML (&lt;b&gt;, &lt;i&gt;, &lt;a href&gt;)</label>
+    <span class="ga-label">Photo (optional)</span>
+    <input type="file" id="dmphoto" accept="image/*" class="ga-in">
+    <p class="ga-small">Sent right away with a normal notification. Results (including any IDs that could not be reached) appear below and under Recent jobs.</p>
+    <button class="btn btn-primary" id="dmsend">Send</button>
+    <p class="ga-small" id="dmres" style="margin-top:10px"></p>
+  </div>
 </div>
 
 <div id="p-private" hidden>
@@ -244,12 +262,12 @@ $('#botSel').addEventListener('change', e => { cur = e.target.value; upage = 1; 
 document.querySelectorAll('.ga-tab').forEach(b => b.addEventListener('click', () => {
   tab = b.dataset.t;
   document.querySelectorAll('.ga-tab').forEach(x => x.classList.toggle('on', x === b));
-  ['overview', 'users', 'products', 'announce', 'private', 'maint'].forEach(t => $('#p-' + t).hidden = t !== tab);
+  ['overview', 'users', 'products', 'announce', 'dm', 'private', 'maint'].forEach(t => $('#p-' + t).hidden = t !== tab);
   refreshTab();
 }));
 function refreshTab() {
   if (tab === 'users') loadUsers(); else if (tab === 'products') loadProducts();
-  else if (tab === 'announce') renderAnnounce(); else if (tab === 'private') loadPrivate(); else if (tab === 'maint') renderMaint(); else renderOverview();
+  else if (tab === 'announce') renderAnnounce(); else if (tab === 'dm') renderDm(); else if (tab === 'private') loadPrivate(); else if (tab === 'maint') renderMaint(); else renderOverview();
 }
 
 // ── overview
@@ -712,6 +730,34 @@ async function loadSchedules() {
   j.native.forEach(s => row(s.display + ' (bot-native)', s.text || '📷', s.run_at + ' (bot time)', s.recurring ? 'every ' + s.recurring : 'once', {id: s.id, bot: s.bot, native: true}));
   if (!box.children.length) box.append(el('span', {class: 'ga-small'}, 'Nothing scheduled.'));
 }
+
+// ── private message by user ID
+function renderDm() { const b = curBot(); $('#dmbot').textContent = b ? b.display : '—'; }
+async function watchDm(jid) {
+  const out = $('#dmres'); out.textContent = 'Sending…';
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 1500));
+    let x; try { x = (await api('/jobs')).jobs.find(j => j.id === jid); } catch (e) { return; }
+    if (!x) return;
+    if (x.status !== 'running' && x.status !== 'cancelling') { out.textContent = `Job #${jid} ${x.status}: ${x.note || ''}`; return; }
+  }
+  out.textContent = `Job #${jid} is still running — see Recent jobs.`;
+}
+$('#dmsend').addEventListener('click', async () => {
+  const b = curBot(); if (!b) return toast('Pick a bot', true);
+  const ids = $('#dmids').value.trim(), text = $('#dmtext').value.trim(), photo = $('#dmphoto').files[0];
+  const n = new Set(ids.split(/[\s,;]+/).filter(Boolean)).size;
+  if (!n) return toast('Enter at least one Telegram user ID', true);
+  if (!text && !photo) return toast('Write a message or attach a photo', true);
+  if (!confirm(`Send this private message to ${n} user(s) from ${b.display}?`)) return;
+  const fd = new FormData();
+  fd.set('ids', ids); fd.set('text', text); fd.set('html', $('#dmhtml').checked ? '1' : '0');
+  if (photo) fd.set('photo', photo);
+  const j = await api(`/${cur}/dm`, {form: fd});
+  toast(`Sending to ${j.recipients} user(s)` + (j.ignored.length ? ` (ignored: ${j.ignored.join(', ')})` : ''));
+  $('#dmtext').value = ''; $('#dmphoto').value = '';
+  pollJobs(); watchDm(j.job);
+});
 
 // ── scan & clean
 async function renderMaint() {

@@ -1590,6 +1590,115 @@ def api_announce():
     return jsonify(ok=True, jobs=jobs, scheduled=scheduled)
 
 
+# ── private message to specific user IDs ───────────────────────────────────
+MAX_DM_RECIPIENTS = 100
+_DM_REASONS = {"blocked": "blocked the bot", "deleted": "account deleted", "not_found": "never started the bot"}
+
+
+def _parse_dm_ids(raw: str) -> tuple[list[int], list[str]]:
+    """Split on commas/whitespace. Returns (unique valid Telegram user IDs in order, ignored pieces)."""
+    ids: list[int] = []
+    ignored: list[str] = []
+    for part in re.split(r"[,\s;]+", (raw or "").strip()):
+        if not part:
+            continue
+        if re.fullmatch(r"[0-9]{1,15}", part) and int(part) > 0:
+            if int(part) not in ids:
+                ids.append(int(part))
+        else:
+            ignored.append(part)
+    return ids, ignored
+
+
+def _read_photo_upload(f) -> tuple[str, bytes] | None:
+    """Validate an uploaded photo and keep it in memory (nothing is written to disk)."""
+    if not f or not f.filename:
+        return None
+    data = f.read()
+    if len(data) > MAX_PHOTO_BYTES:
+        raise AdapterError("photo too large (max 10 MB)")
+    ext = Path(f.filename).suffix.lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        raise AdapterError("photo must be jpg/png/webp/gif")
+    return f"photo{ext}", data
+
+
+@global_bp.route("/global/api/<bot>/dm", methods=["POST"])
+@api
+def api_dm(bot):
+    ad = need_adapter(bot)
+    ids, ignored = _parse_dm_ids(request.form.get("ids", ""))
+    if not ids:
+        raise AdapterError("enter at least one numeric Telegram user ID")
+    if len(ids) > MAX_DM_RECIPIENTS:
+        raise AdapterError(f"too many recipients ({len(ids)}) — the limit is {MAX_DM_RECIPIENTS} per message")
+    text = (request.form.get("text") or "").strip()
+    upload = _read_photo_upload(request.files.get("photo"))
+    if not text and not upload:
+        raise AdapterError("write a message or attach a photo")
+    limit = 1024 if upload else 4096
+    if len(text) > limit:
+        raise AdapterError(f"message too long ({len(text)} characters, the limit is {limit}"
+                           f"{' with a photo' if upload else ''})")
+    html = request.form.get("html") == "1"
+    tokens = valid_tokens(bot_tokens(ad.dir))
+    jid = job_create(bot, "dm", len(ids), f"to {len(ids)} user(s)")
+
+    def send(tok, uid):
+        def go(parse):
+            p = {"chat_id": uid}
+            if parse:
+                p["parse_mode"] = "HTML"
+            if upload:
+                if text:
+                    p["caption"] = text
+                return tg_call(tok, "sendPhoto", p, {"photo": upload})
+            p.update(text=text, disable_web_page_preview=True)
+            return tg_call(tok, "sendMessage", p)
+        ok, res, code = go(html)
+        if not ok and html and "parse entities" in str(res).lower():
+            ok, res, code = go(False)          # malformed HTML: send it as plain text instead
+        return ok, res, code
+
+    per_bot = {t: 0 for t in tokens}
+    failures: dict[int, str] = {}
+    lock = threading.Lock()
+
+    def worker(uid):
+        # Try the bot's tokens in order; the first one that reaches the user wins (no duplicates).
+        classified, other = None, None
+        for tok in tokens:
+            ok, res, code = send(tok, uid)
+            if ok:
+                with lock:
+                    per_bot[tok] += 1
+                return "ok"
+            reason = classify(code, res)
+            if reason:
+                classified = classified or reason
+            else:
+                other = re.sub(r"\d{6,}:[\w-]{20,}", "<token>", str(res or "error"))[:60]
+        with lock:
+            failures[uid] = other or _DM_REASONS.get(classified, "not delivered")
+        return "failed"
+
+    def run():
+        try:
+            counts, cancelled = run_in_pool(jid, ids, worker, workers=4)
+            via = ", ".join(f"{_token_names.get(t, '?')}: {n}" for t, n in per_bot.items() if n)
+            note = f"sent {counts['ok']}/{len(ids)}" + (f" via {via}" if via else "")
+            if failures:
+                shown = sorted(failures.items())[:10]
+                note += "; not delivered: " + ", ".join(f"{u} ({w})" for u, w in shown)
+                note += "…" if len(failures) > 10 else ""
+            job_update(jid, status="cancelled" if cancelled else "done", finished=now_str(), note=note[:300])
+        except Exception as e:  # noqa: BLE001
+            job_update(jid, status="error", note=str(e)[:300], finished=now_str())
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify(ok=True, job=jid, recipients=len(ids), ignored=ignored[:10])
+
+
 @global_bp.route("/global/api/schedules")
 @api
 def api_schedules():
