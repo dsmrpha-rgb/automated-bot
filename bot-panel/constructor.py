@@ -878,25 +878,63 @@ def system_strings(name):
     return jsonify({"strings": out})
 
 
+import time as _time
+import urllib.error as _urlerr
+from concurrent.futures import ThreadPoolExecutor as _Pool
+
+_TOKEN_RE = re.compile(r"^\d{6,}:[\w-]{20,}$")
+
+
+def _telegram_check(token: str) -> tuple[str, dict | None]:
+    """Ask Telegram who a token belongs to.
+
+    Returns ("ok", me) | ("invalid", None) when Telegram itself says the token is wrong |
+    ("unreachable", None) when no answer could be had (timeout, DNS, rate limit, server error),
+    so a network hiccup is never reported as a bad token.
+    """
+    if not _TOKEN_RE.match(token or ""):
+        return "invalid", None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getMe", timeout=6) as r:
+                data = json.loads(r.read().decode())
+            return ("ok", data["result"]) if data.get("ok") else ("invalid", None)
+        except _urlerr.HTTPError as e:
+            if e.code in (400, 401, 403, 404):     # Telegram: this token does not exist
+                return "invalid", None
+            if e.code == 429:
+                try:
+                    wait = int(json.loads(e.read()).get("parameters", {}).get("retry_after", 1))
+                except Exception:
+                    wait = 1
+                _time.sleep(min(max(wait, 1), 5))
+        except Exception:
+            pass                                    # timeout / DNS / TLS / unreadable answer: try again
+        if attempt < 2:
+            _time.sleep(0.6 * (attempt + 1))
+    return "unreachable", None
+
+
 def _telegram_me(token: str) -> dict | None:
-    try:
-        with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getMe", timeout=8) as r:
-            data = json.loads(r.read().decode())
-        return data["result"] if data.get("ok") else None
-    except Exception:
-        return None
+    state, me = _telegram_check(token)
+    return me if state == "ok" else None
+
+
+def _check_many(tokens: list[str]) -> list[tuple[str, dict | None]]:
+    """Check several tokens at once, results in the same order."""
+    if not tokens:
+        return []
+    with _Pool(max_workers=min(6, len(tokens))) as pool:
+        return list(pool.map(_telegram_check, tokens))
 
 
 @constructor_bp.route("/constructor/api/check-tokens", methods=["POST"])
 @login_required
 def check_tokens():
-    tokens = [str(t).strip() for t in (request.get_json(force=True, silent=True) or {}).get("tokens", [])]
+    tokens = [t for t in (str(t).strip() for t in (request.get_json(force=True, silent=True) or {}).get("tokens", [])) if t][:20]
     results = []
-    for t in tokens[:20]:
-        if not t:
-            continue
-        me = _telegram_me(t) if re.match(r"^\d{6,}:[\w-]{20,}$", t) else None
-        results.append({"token": t, "ok": bool(me), "username": (me or {}).get("username", "")})
+    for t, (state, me) in zip(tokens, _check_many(tokens)):
+        results.append({"token": t, "ok": state == "ok", "state": state, "username": (me or {}).get("username", "")})
     return jsonify({"results": results})
 
 
@@ -1444,13 +1482,13 @@ def create_bot():
         return jsonify({"error": f"'{name}' already exists — pick another name"}), 409
     template = d.get("template") if d.get("template") in ("shop", "shop_categories", "blank") else "shop"
     langs = [l for l in d.get("langs", ["en"]) if l in ("en", "ka", "ru")] or ["en"]
-    tokens = []
-    for t in d.get("tokens", []):
-        t = str(t).strip()
-        if t:
-            if not _telegram_me(t):
-                return jsonify({"error": "A token was rejected by Telegram — check it or leave it empty for now"}), 400
-            tokens.append(t)
+    tokens = [t for t in (str(t).strip() for t in d.get("tokens", [])) if t]
+    states = [s for s, _me in _check_many(tokens)]
+    if "invalid" in states:
+        return jsonify({"error": "A token was rejected by Telegram — check it or leave it empty for now"}), 400
+    if "unreachable" in states:
+        return jsonify({"error": "Couldn't reach Telegram to check a token (a network hiccup, not a wrong token). "
+                                 "Press Create again in a moment, or leave the token empty and add it later in the builder."}), 503
     admins = [str(a).strip() for a in d.get("admins", []) if str(a).strip().isdigit()]
     p = {"name": name, "display": str(d.get("display_name", "")).strip()[:60] or name,
          "template": template, "langs": langs, "tokens": tokens, "admins": admins,

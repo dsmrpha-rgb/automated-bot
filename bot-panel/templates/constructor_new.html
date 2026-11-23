@@ -14,7 +14,7 @@
 .tpl .opt.on{border-color:var(--accent2);background:rgba(108,92,231,.12)}.tpl .opt b{display:block;margin:6px 0 4px}.tpl .opt span{font-size:12px;color:var(--text2)}
 .nav{display:flex;justify-content:space-between;margin-top:22px}
 .tok{display:flex;gap:8px;align-items:center;margin-bottom:8px}.tok .tag{font-size:11px;padding:3px 9px;border-radius:10px;background:var(--bg3);color:var(--text2);white-space:nowrap}
-.tag.g{background:rgba(0,184,148,.15);color:var(--green)}.tag.r{background:rgba(225,112,85,.15);color:var(--red)}
+.tag.g{background:rgba(0,184,148,.15);color:var(--green)}.tag.r{background:rgba(225,112,85,.15);color:var(--red)}.tag.y{background:rgba(253,203,110,.15);color:var(--yellow,#fdcb6e)}
 .prog div{padding:7px 0;color:var(--text2)}.prog div:last-child{color:var(--text)}
 .chk{display:flex;gap:8px;align-items:center;margin:8px 0}
 </style>
@@ -48,7 +48,7 @@ function draw() {
     b.append(h('h2', {}, 'Connect Telegram'), h('p', {class: 'hint'}, 'Create a bot with @BotFather and paste its token. You can add more tokens (all share one shop) or leave this empty and add it later in the builder — the bot just won’t run until it has a token.'),
       h('label', {class: 'f'}, 'Bot token(s)'));
     S.tokens.forEach((t, i) => b.append(h('div', {class: 'tok'}, h('input', {value: t, placeholder: '123456789:AA…', oninput: ev => { S.tokens[i] = ev.target.value.trim(); }, onblur: check}),
-      h('span', {class: 'tag ' + (S.checks[t] ? (S.checks[t].ok ? 'g' : 'r') : '')}, S.checks[t] ? (S.checks[t].ok ? '@' + S.checks[t].username : 'rejected') : '—'))));
+      h('span', {class: 'tag ' + tagCls(t)}, tagText(t)))));
     b.append(h('button', {class: 'btn btn-ghost btn-sm', onclick: () => { S.tokens.push(''); draw(); }}, '＋ another token'),
       h('label', {class: 'f'}, 'Admin Telegram ID(s)'));
     S.admins.forEach((a, i) => b.append(h('div', {class: 'tok'}, h('input', {value: a, placeholder: '123456789', oninput: ev => { S.admins[i] = ev.target.value.replace(/\D/g, ''); }}))));
@@ -63,11 +63,17 @@ function draw() {
   if (S.step < 3 || (S.step === 3 && !S.job)) b.append(h('div', {class: 'nav'}, S.step ? h('button', {class: 'btn btn-ghost', onclick: () => { S.step--; draw(); }}, '← Back') : h('span'),
     h('button', {class: 'btn btn-primary', id: 'next', onclick: next}, S.step === 3 ? '🚀 Create bot' : 'Next →')));
 }
-async function check() { const t = S.tokens.filter(Boolean); if (!t.length) return; try { const r = await post('/constructor/api/check-tokens', {tokens: t}); r.results.forEach(x => S.checks[x.token] = x); draw(); } catch (e) {} }
+const tagCls = t => { const c = S.checks[t]; return c ? (c.ok ? 'g' : c.state === 'unreachable' ? 'y' : 'r') : ''; };
+const tagText = t => { const c = S.checks[t]; return c ? (c.ok ? '@' + c.username : c.state === 'unreachable' ? "can't reach Telegram" : 'rejected') : '—'; };
+async function check() { const t = S.tokens.filter(x => x && !(S.checks[x] && S.checks[x].ok)); if (!t.length) return; try { const r = await post('/constructor/api/check-tokens', {tokens: t}); r.results.forEach(x => S.checks[x.token] = x); draw(); } catch (e) {} }
 async function next() {
   if (S.step === 0 && !S.langs.length) { alert('Pick at least one language'); return; }
   if (S.step === 1) { if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{1,38}$/.test(S.name)) { alert('Internal id: 2–39 characters, letters, digits, - or _'); return; } }
-  if (S.step === 2) { await check(); const bad = S.tokens.filter(t => t && S.checks[t] && !S.checks[t].ok); if (bad.length) { alert('Telegram rejected a token — fix it or clear it.'); return; } }
+  if (S.step === 2) { await check();
+    const bad = S.tokens.filter(t => t && S.checks[t] && S.checks[t].state === 'invalid');
+    if (bad.length) { alert('Telegram rejected a token — fix it or clear it.'); return; }
+    const unk = S.tokens.filter(t => t && (!S.checks[t] || S.checks[t].state === 'unreachable'));
+    if (unk.length && !confirm("Couldn't reach Telegram to verify " + (unk.length > 1 ? 'some tokens' : 'a token') + " right now (a network hiccup — it does not mean the token is wrong). Continue anyway? Creating the bot checks again.")) return; }
   if (S.step < 3) { S.step++; draw(); return; }
   $('#next').disabled = true; $('#next').textContent = 'Creating…';
   try {
