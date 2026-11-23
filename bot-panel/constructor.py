@@ -884,48 +884,73 @@ from concurrent.futures import ThreadPoolExecutor as _Pool
 
 _TOKEN_RE = re.compile(r"^\d{6,}:[\w-]{20,}$")
 
+# A token Telegram doubts (wrong, revoked, or asked about too often) gets an escalating "Too Many
+# Requests" penalty, and every further request makes it longer. So results are remembered briefly:
+# one wizard session must cost one request per token, not one per blur / Next / Create.
+_CHECK_CACHE: dict = {}
+_CHECK_TTL = {"ok": 300, "invalid": 60}
 
-def _telegram_check(token: str) -> tuple[str, dict | None]:
-    """Ask Telegram who a token belongs to.
 
-    Returns ("ok", me) | ("invalid", None) when Telegram itself says the token is wrong |
-    ("unreachable", None) when no answer could be had (timeout, DNS, rate limit, server error),
-    so a network hiccup is never reported as a bad token.
+def _now() -> float:
+    return _time.monotonic()
+
+
+def _telegram_check(token: str) -> tuple[str, dict | None, int]:
+    """Ask Telegram who a token belongs to (no caching).
+
+    Returns (state, me, retry_after) with state one of
+      "ok"          - the token works
+      "invalid"     - Telegram says there is no such bot / the token is wrong
+      "limited"     - Telegram answered 429: it is rate-limiting this token; retry_after = seconds to wait
+      "unreachable" - no answer at all (timeout, DNS, TLS, server error), retried a few times
     """
     if not _TOKEN_RE.match(token or ""):
-        return "invalid", None
+        return "invalid", None, 0
     for attempt in range(3):
         try:
             with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getMe", timeout=6) as r:
                 data = json.loads(r.read().decode())
-            return ("ok", data["result"]) if data.get("ok") else ("invalid", None)
+            return ("ok", data["result"], 0) if data.get("ok") else ("invalid", None, 0)
         except _urlerr.HTTPError as e:
             if e.code in (400, 401, 403, 404):     # Telegram: this token does not exist
-                return "invalid", None
-            if e.code == 429:
+                return "invalid", None, 0
+            if e.code == 429:                       # do NOT retry into a penalty: it only makes it longer
                 try:
-                    wait = int(json.loads(e.read()).get("parameters", {}).get("retry_after", 1))
+                    wait = int(json.loads(e.read()).get("parameters", {}).get("retry_after", 30))
                 except Exception:
-                    wait = 1
-                _time.sleep(min(max(wait, 1), 5))
+                    wait = 30
+                return "limited", None, max(wait, 1)
         except Exception:
             pass                                    # timeout / DNS / TLS / unreadable answer: try again
         if attempt < 2:
             _time.sleep(0.6 * (attempt + 1))
-    return "unreachable", None
+    return "unreachable", None, 0
+
+
+def _check_cached(token: str) -> tuple[str, dict | None, int]:
+    hit = _CHECK_CACHE.get(token)
+    if hit and hit[0] > _now():
+        return hit[1], hit[2], max(int(hit[0] - _now()), 1) if hit[1] == "limited" else 0
+    state, me, retry = _telegram_check(token)
+    ttl = _CHECK_TTL.get(state) or (min(max(retry, 5), 600) if state == "limited" else 0)
+    if ttl:
+        if len(_CHECK_CACHE) > 500:
+            _CHECK_CACHE.clear()
+        _CHECK_CACHE[token] = (_now() + ttl, state, me)
+    return state, me, retry
 
 
 def _telegram_me(token: str) -> dict | None:
-    state, me = _telegram_check(token)
+    state, me, _retry = _check_cached(token)
     return me if state == "ok" else None
 
 
-def _check_many(tokens: list[str]) -> list[tuple[str, dict | None]]:
-    """Check several tokens at once, results in the same order."""
+def _check_many(tokens: list[str]) -> list[tuple[str, dict | None, int]]:
+    """Check several tokens at once (using remembered results), in the same order."""
     if not tokens:
         return []
     with _Pool(max_workers=min(6, len(tokens))) as pool:
-        return list(pool.map(_telegram_check, tokens))
+        return list(pool.map(_check_cached, tokens))
 
 
 @constructor_bp.route("/constructor/api/check-tokens", methods=["POST"])
@@ -933,8 +958,9 @@ def _check_many(tokens: list[str]) -> list[tuple[str, dict | None]]:
 def check_tokens():
     tokens = [t for t in (str(t).strip() for t in (request.get_json(force=True, silent=True) or {}).get("tokens", [])) if t][:20]
     results = []
-    for t, (state, me) in zip(tokens, _check_many(tokens)):
-        results.append({"token": t, "ok": state == "ok", "state": state, "username": (me or {}).get("username", "")})
+    for t, (state, me, retry) in zip(tokens, _check_many(tokens)):
+        results.append({"token": t, "ok": state == "ok", "state": state, "retry_after": retry,
+                        "username": (me or {}).get("username", "")})
     return jsonify({"results": results})
 
 
@@ -1483,9 +1509,15 @@ def create_bot():
     template = d.get("template") if d.get("template") in ("shop", "shop_categories", "blank") else "shop"
     langs = [l for l in d.get("langs", ["en"]) if l in ("en", "ka", "ru")] or ["en"]
     tokens = [t for t in (str(t).strip() for t in d.get("tokens", [])) if t]
-    states = [s for s, _me in _check_many(tokens)]
+    checks = _check_many(tokens)
+    states = [c[0] for c in checks]
     if "invalid" in states:
         return jsonify({"error": "A token was rejected by Telegram — check it or leave it empty for now"}), 400
+    if "limited" in states:
+        wait = max(c[2] for c in checks if c[0] == "limited")
+        return jsonify({"error": f"Telegram is rate-limiting a token (it asks to wait about {wait} s). That usually means the token "
+                                 "is wrong or revoked, or another program is already using it. Check the token, wait a bit, or leave "
+                                 "it empty and add it later in the builder."}), 503
     if "unreachable" in states:
         return jsonify({"error": "Couldn't reach Telegram to check a token (a network hiccup, not a wrong token). "
                                  "Press Create again in a moment, or leave the token empty and add it later in the builder."}), 503

@@ -63,8 +63,8 @@ function draw() {
   if (S.step < 3 || (S.step === 3 && !S.job)) b.append(h('div', {class: 'nav'}, S.step ? h('button', {class: 'btn btn-ghost', onclick: () => { S.step--; draw(); }}, '← Back') : h('span'),
     h('button', {class: 'btn btn-primary', id: 'next', onclick: next}, S.step === 3 ? '🚀 Create bot' : 'Next →')));
 }
-const tagCls = t => { const c = S.checks[t]; return c ? (c.ok ? 'g' : c.state === 'unreachable' ? 'y' : 'r') : ''; };
-const tagText = t => { const c = S.checks[t]; return c ? (c.ok ? '@' + c.username : c.state === 'unreachable' ? "can't reach Telegram" : 'rejected') : '—'; };
+const tagCls = t => { const c = S.checks[t]; return c ? (c.ok ? 'g' : (c.state === 'unreachable' || c.state === 'limited') ? 'y' : 'r') : ''; };
+const tagText = t => { const c = S.checks[t]; return c ? (c.ok ? '@' + c.username : c.state === 'limited' ? 'rate-limited by Telegram (~' + c.retry_after + 's)' : c.state === 'unreachable' ? "can't reach Telegram" : 'rejected') : '—'; };
 async function check() { const t = S.tokens.filter(x => x && !(S.checks[x] && S.checks[x].ok)); if (!t.length) return; try { const r = await post('/constructor/api/check-tokens', {tokens: t}); r.results.forEach(x => S.checks[x.token] = x); draw(); } catch (e) {} }
 async function next() {
   if (S.step === 0 && !S.langs.length) { alert('Pick at least one language'); return; }
@@ -72,6 +72,8 @@ async function next() {
   if (S.step === 2) { await check();
     const bad = S.tokens.filter(t => t && S.checks[t] && S.checks[t].state === 'invalid');
     if (bad.length) { alert('Telegram rejected a token — fix it or clear it.'); return; }
+    const lim = S.tokens.filter(t => t && S.checks[t] && S.checks[t].state === 'limited');
+    if (lim.length) { alert('Telegram is rate-limiting a token (it asks to wait about ' + Math.max(...lim.map(t => S.checks[t].retry_after)) + ' s). That usually means the token is wrong or revoked, or another program is already using it. Check it in @BotFather, wait a bit, or clear the box and add the token later in the builder.'); return; }
     const unk = S.tokens.filter(t => t && (!S.checks[t] || S.checks[t].state === 'unreachable'));
     if (unk.length && !confirm("Couldn't reach Telegram to verify " + (unk.length > 1 ? 'some tokens' : 'a token') + " right now (a network hiccup — it does not mean the token is wrong). Continue anyway? Creating the bot checks again.")) return; }
   if (S.step < 3) { S.step++; draw(); return; }

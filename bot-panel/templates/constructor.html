@@ -1160,7 +1160,7 @@ function sBot(b, redraw) {
   const e = envState;
   b.append(h('h3', {style: 'margin-bottom:8px'}, 'Bot tokens'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'One bot or several — all tokens share the same shop, users and balances. Get tokens from @BotFather.'));
   e.tokens.forEach((t, i) => b.append(h('div', {class: 'row', style: 'margin-bottom:6px'}, h('div', {class: 'grow'}, inp(t, v => { e.tokens[i] = v.trim(); renderTop(); }, {placeholder: '123456789:AA…', onblur: () => checkTokens(redraw)})),
-    h('span', {class: 'tag ' + (e.checks && e.checks[t] ? (e.checks[t].ok ? 'g' : e.checks[t].state === 'unreachable' ? 'y' : 'r') : '')}, e.checks && e.checks[t] ? (e.checks[t].ok ? '@' + e.checks[t].username : e.checks[t].state === 'unreachable' ? "can't reach Telegram" : 'rejected') : 'unchecked'),
+    h('span', {class: 'tag ' + (e.checks && e.checks[t] ? (e.checks[t].ok ? 'g' : (e.checks[t].state === 'unreachable' || e.checks[t].state === 'limited') ? 'y' : 'r') : '')}, e.checks && e.checks[t] ? (e.checks[t].ok ? '@' + e.checks[t].username : e.checks[t].state === 'limited' ? 'rate-limited by Telegram (~' + e.checks[t].retry_after + 's)' : e.checks[t].state === 'unreachable' ? "can't reach Telegram" : 'rejected') : 'unchecked'),
     h('button', {class: 'ghost danger', onclick: () => { e.tokens.splice(i, 1); renderTop(); redraw(); }}, '✕'))));
   b.append(h('div', {class: 'row'}, h('button', {onclick: () => { e.tokens.push(''); redraw(); }}, '＋ Add token'), h('button', {onclick: () => checkTokens(redraw, true)}, '✓ Check tokens')));
   b.append(h('h3', {style: 'margin:22px 0 8px'}, 'Admin IDs'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Telegram user IDs that can open the in-bot admin panel and receive notifications. Find an ID with @userinfobot.'));
@@ -1171,7 +1171,7 @@ function sBot(b, redraw) {
 async function checkTokens(redraw, loud) {
   const toks = envState.tokens.filter(Boolean); if (!toks.length) return;
   try { const r = await api('/constructor/api/check-tokens', {body: {tokens: toks}}); envState.checks = envState.checks || {}; r.results.forEach(x => envState.checks[x.token] = x);
-    envState.usernames = r.results.filter(x => x.ok).map(x => x.username); if (loud) { const bad = r.results.some(x => x.state === 'invalid'), unk = r.results.some(x => x.state === 'unreachable'); toast(bad ? 'Some tokens were rejected by Telegram' : unk ? "Couldn't reach Telegram — try again in a moment" : 'All tokens are valid', bad || unk ? 'err' : 'ok'); } } catch (e) { toast(e.message, 'err'); }
+    envState.usernames = r.results.filter(x => x.ok).map(x => x.username); if (loud) { const bad = r.results.some(x => x.state === 'invalid'), lim = r.results.some(x => x.state === 'limited'), unk = r.results.some(x => x.state === 'unreachable'); toast(bad ? 'Some tokens were rejected by Telegram' : lim ? 'Telegram is rate-limiting a token — it is probably wrong or already in use elsewhere' : unk ? "Couldn't reach Telegram — try again in a moment" : 'All tokens are valid', bad || lim || unk ? 'err' : 'ok'); } } catch (e) { toast(e.message, 'err'); }
   if (redraw) redraw();
 }
 
