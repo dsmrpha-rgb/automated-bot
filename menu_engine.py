@@ -89,7 +89,10 @@ from aiogram.types import (
     InputMediaAnimation,
     InputMediaPhoto,
     InputMediaVideo,
+    KeyboardButton,
     Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
 
 import data_store as ds
@@ -101,6 +104,9 @@ _BASE_DIR = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(_BASE_DIR, "menu_config.json")
 
 engine_router = Router(name="menu_engine")
+
+# The constructor looks for this marker to tell whether a bot's engine supports the bottom menu.
+REPLY_MENU_SUPPORT = True
 
 # per-user session state: {user_id: {"vars": {...}, "await": {input cfg} | None}}
 SESSIONS: dict[int, dict] = {}
@@ -944,6 +950,7 @@ async def engine_start(message: Message) -> None:
         if not passed:
             await show_gate(message, is_start=True)
             return
+    await _sync_reply_menu(message, uid)
     await render_page(message, cfg.get("start_page", "main"), is_start=True)
 
 
@@ -952,6 +959,8 @@ async def engine_gate_check(callback: CallbackQuery) -> None:
     g = _gate_cfg()
     uid = callback.from_user.id
     if not g or uid in ADMIN_IDS or ds.is_gate_ok(uid):
+        if _reply_menu() and callback.message is not None:
+            await _sync_reply_menu(callback.message, uid)
         await render_page(callback, load_config().get("start_page", "main"))
         await callback.answer()
         return
@@ -968,6 +977,8 @@ async def engine_gate_check(callback: CallbackQuery) -> None:
         member = await _is_member(callback.bot, str(g.get("channel", "")), uid)
     if member:
         ds.set_gate_ok(uid, True)
+        if _reply_menu(cfg) and callback.message is not None:
+            await _sync_reply_menu(callback.message, uid)
         await render_page(callback, cfg.get("start_page", "main"))
         await callback.answer()
     else:
@@ -1036,6 +1047,8 @@ async def _switch_language(callback: CallbackQuery, code: str, page: str = "") -
     if code in [str(l).lower() for l in cfg.get("langs", [])]:
         ds.set_user_lang(callback.from_user.id, code)
     _sess(callback.from_user.id)["await"] = None
+    if _reply_menu() and callback.message is not None:      # re-send the bottom keyboard in the new language
+        await _sync_reply_menu(callback.message, callback.from_user.id)
     await render_page(callback, page or cfg.get("start_page", "main"))
     await callback.answer()
 
@@ -1169,6 +1182,80 @@ async def engine_confirm(callback: CallbackQuery) -> None:
 
 
 # ── input handling ───────────────────────────────────────────────────────────
+# ── static bottom menu (config "reply_menu") ─────────────────────────────────
+# A persistent keyboard under the text field. Its buttons send plain text, so a press is matched by
+# label (in any language) and opens the button's page as a NEW message, with the page's usual buttons.
+def _reply_menu(cfg: dict | None = None) -> dict | None:
+    rm = (cfg or load_config()).get("reply_menu")
+    if not isinstance(rm, dict) or not rm.get("enabled") or not isinstance(rm.get("rows"), list):
+        return None
+    return rm
+
+
+def _reply_menu_markup(uid: int, cfg: dict) -> ReplyKeyboardMarkup | None:
+    rm = _reply_menu(cfg)
+    if not rm:
+        return None
+    lang, default_lang = _lang(uid, cfg), cfg.get("default_lang", "ka")
+    rows = []
+    for row in rm["rows"]:
+        built = [KeyboardButton(text=lb) for lb in (_pick(b.get("label", ""), lang, default_lang).strip()
+                                                  for b in row if isinstance(b, dict)) if lb]
+        if built:
+            rows.append(built)
+    if not rows:
+        return None
+    placeholder = _pick(rm.get("placeholder", ""), lang, default_lang).strip()[:64]
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=True,
+                               input_field_placeholder=placeholder or None)
+
+
+def _reply_menu_target(text: str) -> str | None:
+    """The page a bottom-menu button opens, matching its label in any language."""
+    rm = _reply_menu()
+    if not rm or not text:
+        return None
+    pressed = text.strip()
+    for row in rm["rows"]:
+        for b in row:
+            label = b.get("label", "") if isinstance(b, dict) else ""
+            names = [label] if isinstance(label, str) else list(label.values()) if isinstance(label, dict) else []
+            if any(isinstance(n, str) and n.strip() == pressed for n in names):
+                return str(b.get("target", "")) or None
+    return None
+
+
+async def _sync_reply_menu(message: Message, uid: int) -> None:
+    """Attach the bottom keyboard, or clear one this user got earlier if it was switched off since."""
+    cfg = load_config()
+    try:
+        kb = _reply_menu_markup(uid, cfg)
+        if kb:
+            lang, default_lang = _lang(uid, cfg), cfg.get("default_lang", "ka")
+            intro = _pick(cfg["reply_menu"].get("intro", ""), lang, default_lang).strip() or "👇"
+            await message.answer(intro, reply_markup=kb)
+            if not ds.has_reply_kb(uid):
+                ds.set_reply_kb(uid, True)
+        elif ds.has_reply_kb(uid):      # switched off in the constructor: take the old keyboard away, once
+            gone = await message.answer("⌨", reply_markup=ReplyKeyboardRemove())
+            ds.set_reply_kb(uid, False)
+            await gone.delete()
+    except Exception:
+        pass     # a keyboard problem must never block the start screen
+
+
+class ReplyMenuPress(BaseFilter):
+    async def __call__(self, message: Message) -> bool:
+        return _reply_menu_target(message.text or "") is not None
+
+
+@engine_router.message(ReplyMenuPress())
+async def engine_reply_menu(message: Message) -> None:
+    target = _reply_menu_target(message.text or "")
+    _sess(message.from_user.id)["await"] = None     # a menu press ends any typed-input question
+    await render_page(message, target or load_config().get("start_page", "main"), is_start=True)
+
+
 class AwaitingInput(BaseFilter):
     async def __call__(self, message: Message) -> bool:
         s = SESSIONS.get(message.from_user.id)

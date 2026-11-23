@@ -505,6 +505,23 @@ def set_gate_ok(user_id: int, ok: bool) -> None:
         _save(data)
 
 
+def has_reply_kb(user_id: int) -> bool:
+    """True when this user was sent the constructor's bottom keyboard (so it can be cleared if switched off)."""
+    u = get_user(user_id)
+    return bool(u and u.get("reply_kb"))
+
+
+def set_reply_kb(user_id: int, shown: bool) -> None:
+    data = _load()
+    u = data["users"].get(str(user_id))
+    if u is not None:
+        if shown:
+            u["reply_kb"] = True
+        else:
+            u.pop("reply_kb", None)
+        _save(data)
+
+
 # ── Scheduled announcements ───────────────────────────────────────────
 
 def add_scheduled_announcement(text: str, run_at: str,
