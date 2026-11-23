@@ -1464,7 +1464,7 @@ EnvironmentFile={bot_dir}/.env
 WantedBy=multi-user.target
 """)
         subprocess.run(["systemctl", "daemon-reload"], timeout=20)
-        if p["tokens"]:   # a token-less bot would crash-loop, so it is enabled once it has a token
+        if p["tokens"] and not p.get("unverified"):   # a token-less bot would crash-loop, so it is enabled once it has a token
             subprocess.run(["systemctl", "enable", service], timeout=20, capture_output=True)
 
         _job_log(job, "Registering in the panel (Global Admin picks it up automatically)")
@@ -1478,6 +1478,9 @@ WantedBy=multi-user.target
         if p["tokens"] and p.get("start"):
             _job_log(job, "Starting the bot")
             subprocess.run(["systemctl", "start", service], timeout=30)
+        elif p["tokens"] and p.get("unverified"):
+            job["unverified"] = True
+            _job_log(job, "Left stopped: Telegram could not verify the token. Start it from the Dashboard once the token works")
         job["status"] = "done"
         job["name"] = name
         _job_log(job, "Done")
@@ -1513,18 +1516,19 @@ def create_bot():
     states = [c[0] for c in checks]
     if "invalid" in states:
         return jsonify({"error": "A token was rejected by Telegram — check it or leave it empty for now"}), 400
-    if "limited" in states:
-        wait = max(c[2] for c in checks if c[0] == "limited")
-        return jsonify({"error": f"Telegram is rate-limiting a token (it asks to wait about {wait} s). That usually means the token "
-                                 "is wrong or revoked, or another program is already using it. Check the token, wait a bit, or leave "
-                                 "it empty and add it later in the builder."}), 503
-    if "unreachable" in states:
+    unverified = any(st in ("limited", "unreachable") for st in states)
+    if unverified and not d.get("allow_unverified"):
+        if "limited" in states:
+            wait = max(c[2] for c in checks if c[0] == "limited")
+            return jsonify({"error": f"Telegram is rate-limiting a token (it asks to wait about {wait} s). That usually means the token "
+                                     "is wrong or revoked, or another program is already using it. Check the token and wait a bit, "
+                                     "or create the bot anyway (it is created but not started), or leave the token empty."}), 503
         return jsonify({"error": "Couldn't reach Telegram to check a token (a network hiccup, not a wrong token). "
-                                 "Press Create again in a moment, or leave the token empty and add it later in the builder."}), 503
+                                 "Press Create again in a moment, or create the bot anyway (it is created but not started)."}), 503
     admins = [str(a).strip() for a in d.get("admins", []) if str(a).strip().isdigit()]
     p = {"name": name, "display": str(d.get("display_name", "")).strip()[:60] or name,
          "template": template, "langs": langs, "tokens": tokens, "admins": admins,
-         "reply_menu": bool(d.get("reply_menu")), "start": bool(tokens)}
+         "reply_menu": bool(d.get("reply_menu")), "unverified": unverified, "start": bool(tokens) and not unverified}
     job_id = uuid.uuid4().hex[:12]
     job = {"id": job_id, "status": "running", "steps": [], "error": ""}
     _job_save(job)

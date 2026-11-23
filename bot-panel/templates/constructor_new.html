@@ -24,7 +24,7 @@
   <div class="card" id="body"></div>
 </div>
 <script>
-const S = {step: 0, template: 'shop', name: '', display: '', langs: ['en'], reply_menu: false, tokens: [''], admins: [''], checks: {}, job: null};
+const S = {step: 0, template: 'shop', name: '', display: '', langs: ['en'], reply_menu: false, allowUnverified: false, tokens: [''], admins: [''], checks: {}, job: null};
 const $ = s => document.querySelector(s);
 const STEPS = ['Type', 'Name', 'Telegram', 'Create'];
 function h(t, a, ...k) { const e = document.createElement(t); for (const [n, v] of Object.entries(a || {})) { if (v == null || v === false) continue; if (n === 'class') e.className = v; else if (n.startsWith('on')) e.addEventListener(n.slice(2), v); else if (n === 'value') e.value = v; else if (n === 'checked') e.checked = !!v; else e.setAttribute(n, v); } k.flat(9).forEach(x => x != null && x !== false && e.append(x.nodeType ? x : document.createTextNode(x))); return e; }
@@ -48,7 +48,7 @@ function draw() {
     b.append(h('h2', {}, 'Connect Telegram'), h('p', {class: 'hint'}, 'Create a bot with @BotFather and paste its token. You can add more tokens (all share one shop) or leave this empty and add it later in the builder — the bot just won’t run until it has a token.'),
       h('label', {class: 'f'}, 'Bot token(s)'));
     S.tokens.forEach((t, i) => b.append(h('div', {class: 'tok'}, h('input', {value: t, placeholder: '123456789:AA…', oninput: ev => { S.tokens[i] = ev.target.value.trim(); }, onblur: check}),
-      h('span', {class: 'tag ' + tagCls(t)}, tagText(t)))));
+      h('span', {class: 'tag ' + tagCls(t)}, tagText(t)), tagLink(t))));
     b.append(h('button', {class: 'btn btn-ghost btn-sm', onclick: () => { S.tokens.push(''); draw(); }}, '＋ another token'),
       h('label', {class: 'f'}, 'Admin Telegram ID(s)'));
     S.admins.forEach((a, i) => b.append(h('div', {class: 'tok'}, h('input', {value: a, placeholder: '123456789', oninput: ev => { S.admins[i] = ev.target.value.replace(/\D/g, ''); }}))));
@@ -58,11 +58,13 @@ function draw() {
     else { const p = h('div', {class: 'prog'}); b.append(h('h2', {}, S.job.status === 'done' ? '✅ Your bot is ready' : S.job.status === 'error' ? '❌ Something went wrong' : 'Creating your bot…'), p);
       if (S.job.error) b.append(h('div', {style: 'color:var(--red);margin-top:10px'}, S.job.error));
       if (S.job.status === 'done') b.append(h('div', {style: 'margin-top:16px;display:flex;gap:10px'}, h('a', {class: 'btn btn-primary', href: `/bot/${S.name}/constructor`}, 'Open the builder →'), h('a', {class: 'btn btn-ghost', href: '/global'}, 'Global Admin')));
+      if (S.job.status === 'done' && S.job.unverified) b.append(h('div', {style: 'margin-top:14px;padding:10px 12px;border-radius:8px;background:rgba(253,203,110,.12);color:var(--yellow,#fdcb6e);font-size:13px'}, '⚠ The bot was created but is NOT running: Telegram could not verify its token. Once the token works, press Start on the Dashboard.'));
       (S.job.steps || []).forEach(s => p.append(h('div', {}, '✓ ' + s.msg))); }
   }
   if (S.step < 3 || (S.step === 3 && !S.job)) b.append(h('div', {class: 'nav'}, S.step ? h('button', {class: 'btn btn-ghost', onclick: () => { S.step--; draw(); }}, '← Back') : h('span'),
     h('button', {class: 'btn btn-primary', id: 'next', onclick: next}, S.step === 3 ? '🚀 Create bot' : 'Next →')));
 }
+const tagLink = t => { const c = S.checks[t]; return c && (c.state === 'limited' || c.state === 'unreachable') ? h('a', {class: 'tag', href: 'https://api.telegram.org/bot' + t + '/getMe', target: '_blank', rel: 'noopener noreferrer', style: 'text-decoration:none;white-space:nowrap', title: 'Opens Telegram in a new tab from YOUR network: {"ok":true,...} = the token works'}, 'Test in my browser ↗') : null; };
 const tagCls = t => { const c = S.checks[t]; return c ? (c.ok ? 'g' : (c.state === 'unreachable' || c.state === 'limited') ? 'y' : 'r') : ''; };
 const tagText = t => { const c = S.checks[t]; return c ? (c.ok ? '@' + c.username : c.state === 'limited' ? 'rate-limited by Telegram (~' + c.retry_after + 's)' : c.state === 'unreachable' ? "can't reach Telegram" : 'rejected') : '—'; };
 async function check() { const t = S.tokens.filter(x => x && !(S.checks[x] && S.checks[x].ok)); if (!t.length) return; try { const r = await post('/constructor/api/check-tokens', {tokens: t}); r.results.forEach(x => S.checks[x.token] = x); draw(); } catch (e) {} }
@@ -73,13 +75,19 @@ async function next() {
     const bad = S.tokens.filter(t => t && S.checks[t] && S.checks[t].state === 'invalid');
     if (bad.length) { alert('Telegram rejected a token — fix it or clear it.'); return; }
     const lim = S.tokens.filter(t => t && S.checks[t] && S.checks[t].state === 'limited');
-    if (lim.length) { alert('Telegram is rate-limiting a token (it asks to wait about ' + Math.max(...lim.map(t => S.checks[t].retry_after)) + ' s). That usually means the token is wrong or revoked, or another program is already using it. Check it in @BotFather, wait a bit, or clear the box and add the token later in the builder.'); return; }
     const unk = S.tokens.filter(t => t && (!S.checks[t] || S.checks[t].state === 'unreachable'));
-    if (unk.length && !confirm("Couldn't reach Telegram to verify " + (unk.length > 1 ? 'some tokens' : 'a token') + " right now (a network hiccup — it does not mean the token is wrong). Continue anyway? Creating the bot checks again.")) return; }
+    S.allowUnverified = false;
+    if (lim.length || unk.length) {
+      const why = lim.length
+        ? 'Telegram is rate-limiting ' + (lim.length > 1 ? 'some tokens' : 'a token') + ' (it asks to wait about ' + Math.max(...lim.map(t => S.checks[t].retry_after)) + ' s). That usually means the token is wrong or revoked, or another program is already using it.'
+        : "Couldn't reach Telegram to verify " + (unk.length > 1 ? 'some tokens' : 'a token') + ' right now (a network hiccup — it does not mean the token is wrong).';
+      if (!confirm(why + '\n\nCreate the bot anyway? It will be created but NOT started, so it cannot flood Telegram. Start it from the Dashboard once the token works. (Use the “Test in my browser” link next to the token to check it from your own network.)')) return;
+      S.allowUnverified = true;
+    } }
   if (S.step < 3) { S.step++; draw(); return; }
   $('#next').disabled = true; $('#next').textContent = 'Creating…';
   try {
-    const r = await post('/constructor/api/create', {name: S.name, display_name: S.display || S.name, template: S.template, langs: S.langs, reply_menu: S.reply_menu, tokens: S.tokens.filter(Boolean), admins: S.admins.filter(Boolean)});
+    const r = await post('/constructor/api/create', {name: S.name, display_name: S.display || S.name, template: S.template, langs: S.langs, reply_menu: S.reply_menu, allow_unverified: S.allowUnverified, tokens: S.tokens.filter(Boolean), admins: S.admins.filter(Boolean)});
     S.job = {status: 'running', steps: []}; draw(); poll(r.job);
   } catch (e) { alert(e.message); $('#next').disabled = false; $('#next').textContent = '🚀 Create bot'; }
 }
