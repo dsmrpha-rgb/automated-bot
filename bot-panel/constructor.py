@@ -171,6 +171,67 @@ def _clean_hook(hook: dict, default_lang: str):
     return out
 
 
+_RM_MAX_ROWS, _RM_MAX_PER_ROW = 8, 3
+
+
+def _clean_reply_menu(rm: dict, langs: list, default_lang: str, page_ids: set):
+    """Static bottom menu: {enabled, placeholder, intro, rows: [[{label, target}]]}. Returns (ok, message, cleaned).
+
+    The rules are enforced only while it is switched on, so a half-built menu can be saved switched off.
+    """
+    enabled = bool(rm.get("enabled"))
+
+    def texts(val, limit):
+        return {str(k): str(v).strip()[:limit] for k, v in _ml(val, default_lang).items() if str(v).strip()}
+
+    raw_rows = rm.get("rows") if isinstance(rm.get("rows"), list) else []
+    if len(raw_rows) > _RM_MAX_ROWS:
+        return False, f"bottom menu: at most {_RM_MAX_ROWS} rows", {}
+    rows = []
+    for row in raw_rows:
+        if not isinstance(row, list):
+            continue
+        if len(row) > _RM_MAX_PER_ROW:
+            return False, f"bottom menu: at most {_RM_MAX_PER_ROW} buttons per row", {}
+        built = []
+        for b in row:
+            if not isinstance(b, dict):
+                continue
+            label = texts(b.get("label", ""), 64)
+            target = str(b.get("target", "") or "")
+            if not label.get(default_lang):
+                if enabled:
+                    return False, "bottom menu: every button needs a label in the default language", {}
+                continue
+            for l in langs:
+                label.setdefault(l, label[default_lang])          # missing translations fall back to the default
+            if any(v.startswith("/") for v in label.values()):
+                return False, "bottom menu: a button label can't start with “/”", {}
+            if target not in page_ids:
+                if enabled:
+                    return False, f"bottom menu: “{label[default_lang]}” opens a screen that doesn't exist", {}
+                continue
+            built.append({"label": label, "target": target})
+        if built:
+            rows.append(built)
+    if enabled:
+        if not rows:
+            return False, "bottom menu: add at least one button (or switch it off)", {}
+        owner: dict = {}
+        for ri, row in enumerate(rows):
+            for bi, b in enumerate(row):
+                for text in set(b["label"].values()):
+                    if owner.setdefault(text, (ri, bi)) != (ri, bi):
+                        return False, f"bottom menu: two buttons use the label “{text}”", {}
+    out = {"enabled": enabled, "rows": rows}
+    placeholder, intro = texts(rm.get("placeholder", ""), 64), texts(rm.get("intro", ""), 200)
+    if placeholder:
+        out["placeholder"] = placeholder
+    if intro:
+        out["intro"] = intro
+    return True, "", out
+
+
 def _clean_extras(cfg: dict, default_lang: str, page_ids: set):
     """Top-level sections beyond pages: strings, payments, admin_menu, _layout."""
     out: dict = {}
@@ -238,6 +299,14 @@ def _clean_extras(cfg: dict, default_lang: str, page_ids: set):
             "check_label": _ml(gate.get("check_label", ""), default_lang),
             "fail_text": _ml(gate.get("fail_text", ""), default_lang),
         }
+
+    rmenu = cfg.get("reply_menu")
+    if isinstance(rmenu, dict):
+        langs = [str(l) for l in (cfg.get("langs") or [default_lang])]
+        ok, msg, rm_clean = _clean_reply_menu(rmenu, langs, default_lang, page_ids)
+        if not ok:
+            return False, msg, {}
+        out["reply_menu"] = rm_clean
 
     rf = cfg.get("referral")
     if isinstance(rf, dict):
@@ -517,6 +586,20 @@ def get_menu_config(name):
         except Exception as e:
             return jsonify({"error": f"corrupt config: {e}", "config": _default_config()}), 200
     return jsonify(_default_config())
+
+
+@constructor_bp.route("/bot/<name>/api/features", methods=["GET"])
+@login_required
+def bot_features(name):
+    """What this bot's engine can do — older bots keep their own copy of the engine."""
+    bot = _bot_or_none(name)
+    if not bot:
+        return jsonify({"error": "not found"}), 404
+    try:
+        engine = (_bot_dir(bot) / "menu_engine.py").read_text(encoding="utf-8")
+    except OSError:
+        engine = ""
+    return jsonify({"reply_menu": "REPLY_MENU_SUPPORT" in engine})
 
 
 @constructor_bp.route("/bot/<name>/api/menu-config", methods=["POST"])
@@ -1001,6 +1084,19 @@ def _strip_money_signs(node):
     return node
 
 
+def default_reply_menu(langs: list[str], start_page: str) -> dict:
+    """A working starting point for the bottom menu: one button back to the start screen."""
+    def ml(en, ka, ru):
+        table = {"en": en, "ka": ka, "ru": ru}
+        return {l: table.get(l, en) for l in langs}
+    return {
+        "enabled": True,
+        "placeholder": ml("Menu", "მენიუ", "Меню"),
+        "intro": ml("👇 Use the menu below", "👇 გამოიყენეთ ქვედა მენიუ", "👇 Используйте меню ниже"),
+        "rows": [[{"label": ml("🏠 Main menu", "🏠 მთავარი მენიუ", "🏠 Главное меню"), "target": start_page}]],
+    }
+
+
 def starter_config(kind: str, langs: list[str], _internal: bool = False) -> dict:
     """Ready-made menu_config for the wizard ('blank' or 'shop')."""
     def ml(en, ka, ru):
@@ -1269,6 +1365,8 @@ def _run_create(job: dict, p: dict) -> None:
 
         _job_log(job, "Writing your menu")
         cfg = starter_config(p["template"], p["langs"])
+        if p.get("reply_menu"):
+            cfg["reply_menu"] = default_reply_menu(p["langs"], cfg["start_page"])
         (bot_dir / "menu_config.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
         _job_log(job, "Writing settings (.env)")
@@ -1356,7 +1454,7 @@ def create_bot():
     admins = [str(a).strip() for a in d.get("admins", []) if str(a).strip().isdigit()]
     p = {"name": name, "display": str(d.get("display_name", "")).strip()[:60] or name,
          "template": template, "langs": langs, "tokens": tokens, "admins": admins,
-         "start": bool(tokens)}
+         "reply_menu": bool(d.get("reply_menu")), "start": bool(tokens)}
     job_id = uuid.uuid4().hex[:12]
     job = {"id": job_id, "status": "running", "steps": [], "error": ""}
     _job_save(job)

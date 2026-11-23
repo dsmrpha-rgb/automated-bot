@@ -113,6 +113,11 @@ details.adv>summary{cursor:pointer;color:var(--text2);font-size:12px;margin:14px
 .kb .kr{display:flex;gap:4px}
 .kb button{flex:1;background:#2b5278;border:none;color:#fff;padding:8px 6px;font-size:12px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kb button:hover{background:#34628f}
+.rkb{background:#0e1621;border-top:1px solid #1f2c3a;padding:6px;display:flex;flex-direction:column;gap:4px}
+.rkb .kr{display:flex;gap:4px}
+.rkb button{flex:1;background:#2b3a4a;border:none;color:#e8eef5;padding:9px 6px;font-size:12px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rkb button:hover{background:#34475b}
+.rkb .ph-in{font-size:11px;color:#6c7c8c;padding:4px 6px 2px}
 .phnote{font-size:11px;color:#7e9bb5;margin-top:8px;text-align:center}
 .askbox{display:flex;gap:4px;margin-top:8px}.askbox input{background:#17212b;border-color:#2b3947}
 
@@ -257,6 +262,7 @@ function normalize(c) {
   c._layout = c._layout || {};
   c.strings = c.strings || {};
   c.admin_menu = c.admin_menu || {hidden: []};
+  if (c.reply_menu) { const r = c.reply_menu; r.placeholder = ml(r.placeholder); r.intro = ml(r.intro); r.rows = (r.rows || []).map(row => row.map(b => ({label: ml(b.label), target: b.target || ''}))); }
   c.payments = c.payments || {};
   return c;
 }
@@ -956,6 +962,18 @@ function computeIssues() {
       else push('warn', id, `“${nm}” does not say which screen opens when an item is picked.`);
     }
   }
+  if (cfg.reply_menu && cfg.reply_menu.enabled) {
+    const rows = cfg.reply_menu.rows || [], seen = {};
+    if (!rows.some(r => r.length)) push('error', null, 'Bottom menu: add at least one button, or switch it off.');
+    rows.forEach(r => r.forEach(bt => {
+      const lab = bt.label[cfg.default_lang] || Object.values(bt.label).find(Boolean) || '';
+      if (!lab.trim()) push('error', null, 'Bottom menu: a button has no label.');
+      else if (lab.trim().startsWith('/')) push('error', null, `Bottom menu: “${lab}” can't start with “/”.`);
+      if (!bt.target || !cfg.pages[bt.target]) push('error', null, `Bottom menu: “${lab || 'a button'}” opens a screen that doesn't exist.`);
+      else incoming[bt.target] = 1;
+      new Set(Object.values(bt.label).map(v => (v || '').trim()).filter(Boolean)).forEach(v => { if (seen[v] && seen[v] !== bt) push('error', null, `Bottom menu: two buttons use the label “${v}”.`); seen[v] = bt; });
+    }));
+  }
   for (const id of Object.keys(cfg.pages)) if (id !== cfg.start_page && !incoming[id]) push('warn', id, `“${pname(id)}” can't be reached — no button leads to it.`);
   const codes = (cfg.payments.coins || []).map(c => c.code.toUpperCase()); const dup = codes.find((c, i) => codes.indexOf(c) !== i);
   if (dup) push('error', null, `Payment coin ${dup} is listed twice.`);
@@ -1085,6 +1103,12 @@ function renderPreview() {
   }
   chat.append(h('div', {class: 'phnote'}, `Preview of “${pname(id)}” · values are samples`));
   ph.append(chat);
+  const rmv = cfg.reply_menu;
+  if (rmv && rmv.enabled && (rmv.rows || []).some(r => r.length)) {
+    const kbEl = rmKeyboardEl(rmv.rows, bt => { if (bt.target && P(bt.target)) pvGo(bt.target); });
+    kbEl.prepend(h('div', {class: 'ph-in'}, rmv.placeholder[editLang] || rmv.placeholder[cfg.default_lang] || 'Message'));
+    ph.append(kbEl);
+  }
 }
 function pvGo(target) { if (!target || !P(target)) return; pv.history.push(pv.page); pv.page = target; renderPreview(); }
 function pvPress(id, p, a) {
@@ -1110,12 +1134,12 @@ function pvAnswer(p, raw, f) {
 let settingsTab = 'general';
 function openSettings(tab) {
   if (tab) settingsTab = tab;
-  const root = h('div', {style: 'display:flex;flex-direction:column;flex:1;min-height:0'}); const tabs = [['general', 'General'], ['bot', 'Bot & admins'], ['gate', 'Channel gate'], ['districtpics', 'District pictures'], ['currency', 'Currency'], ['referral', 'Referrals'], ['demobal', 'Demo balance'], ['payments', 'Payments'], ['adminmenu', 'Admin menu'], ['messages', 'System messages'], ['images', 'Pictures'], ['history', 'History']];
+  const root = h('div', {style: 'display:flex;flex-direction:column;flex:1;min-height:0'}); const tabs = [['general', 'General'], ['bot', 'Bot & admins'], ['bottommenu', 'Bottom menu'], ['gate', 'Channel gate'], ['districtpics', 'District pictures'], ['currency', 'Currency'], ['referral', 'Referrals'], ['demobal', 'Demo balance'], ['payments', 'Payments'], ['adminmenu', 'Admin menu'], ['messages', 'System messages'], ['images', 'Pictures'], ['history', 'History']];
   const body = h('div', {class: 'mb'});
   const draw = () => {
     root.replaceChildren(h('div', {class: 'mh'}, h('h2', {}, '⚙ Settings'), h('button', {class: 'ghost', onclick: () => { closeModal(); fullRender(); }}, 'Close')),
       h('div', {class: 'stabs'}, tabs.map(([k, t]) => h('button', {class: settingsTab === k ? 'on' : '', onclick: () => { settingsTab = k; draw(); }}, t))), body);
-    body.replaceChildren(); ({general: sGeneral, bot: sBot, gate: sGate, districtpics: sDistrictPics, currency: sCurrency, demobal: sDemoBalance, referral: sReferral, payments: sPayments, adminmenu: sAdminMenu, messages: sMessages, images: sImages, history: sHistory})[settingsTab](body, draw);
+    body.replaceChildren(); ({general: sGeneral, bot: sBot, bottommenu: sBottomMenu, gate: sGate, districtpics: sDistrictPics, currency: sCurrency, demobal: sDemoBalance, referral: sReferral, payments: sPayments, adminmenu: sAdminMenu, messages: sMessages, images: sImages, history: sHistory})[settingsTab](body, draw);
   };
   closeModal(); const m = h('div', {class: 'modal', style: 'height:86vh', onclick: ev => ev.stopPropagation()}, root);
   $('#modalRoot').append(h('div', {class: 'ov', onclick: () => { closeModal(); fullRender(); }}, m)); draw();
@@ -1192,6 +1216,65 @@ function sGate(b, redraw) {
   const tx = h('div', {class: 'tx'}); tx.innerHTML = tgHtml(g.text[editLang] || g.text[cfg.default_lang] || '', 'HTML'); bub.append(tx);
   const kbd = h('div', {class: 'kb'}, h('div', {class: 'kr'}, h('button', {}, g.join_label[editLang] || g.join_label[cfg.default_lang] || 'Join')), h('div', {class: 'kr'}, h('button', {}, g.check_label[editLang] || g.check_label[cfg.default_lang] || 'Check')));
   b.append(h('div', {class: 'hint', style: 'margin-top:14px'}, 'What new users see:'), h('div', {class: 'chat', style: 'background:transparent;padding:0'}, bub, kbd));
+}
+
+let rmSupported = null;
+const RM_DEFAULTS = {
+  intro: {en: '👇 Use the menu below', ka: '👇 გამოიყენეთ ქვედა მენიუ', ru: '👇 Используйте меню ниже'},
+  placeholder: {en: 'Menu', ka: 'მენიუ', ru: 'Меню'},
+};
+function rmLabel(bt) { return bt.label[editLang] || bt.label[cfg.default_lang] || Object.values(bt.label).find(Boolean) || ''; }
+function rmKeyboardEl(rows, onPress) {
+  return h('div', {class: 'rkb'}, rows.map(row => h('div', {class: 'kr'}, row.map(bt => h('button', {onclick: () => onPress && onPress(bt)}, rmLabel(bt) || '·')))));
+}
+function sBottomMenu(b, redraw) {
+  if (rmSupported === null) {
+    b.append(h('div', {class: 'hint'}, 'Checking this bot…'));
+    api(B('/api/features')).then(f => { rmSupported = !!f.reply_menu; }).catch(() => { rmSupported = false; }).then(() => { if (settingsTab === 'bottommenu') redraw(); });
+    return;
+  }
+  b.append(h('div', {class: 'hint', style: 'margin:0 0 10px'}, 'A menu that stays visible at the bottom of the chat, under the message box (not inside a message). It never changes: every button opens a screen you choose as a new message, and that screen can have its own buttons as usual. The buttons you already have inside messages keep working.'));
+  if (!rmSupported) {
+    b.append(h('div', {class: 'card'}, h('b', {}, 'Not available for this bot'), h('div', {class: 'hint'}, 'This bot was created before the bottom menu existed, so its engine cannot show it. Bots created from now on have it.')));
+    return;
+  }
+  const rm = cfg.reply_menu, on = !!(rm && rm.enabled), lname = LANG_NAMES[editLang] || editLang;
+  const ensure = () => { if (!cfg.reply_menu) cfg.reply_menu = {enabled: false, placeholder: {}, intro: {}, rows: []}; const r = cfg.reply_menu; r.placeholder = r.placeholder || {}; r.intro = r.intro || {}; r.rows = r.rows || []; return r; };
+  const newBtn = () => { const n = ensure().rows.reduce((a, r) => a + r.length, 0) + 1; return {label: Object.fromEntries(cfg.langs.map(l => [l, 'Button ' + n])), target: cfg.start_page}; };
+  b.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: on, onchange: ev => { edit(() => {
+    const r = ensure(); r.enabled = ev.target.checked;
+    if (r.enabled) {
+      cfg.langs.forEach(l => { if (!(r.intro[l] || '').trim()) r.intro[l] = RM_DEFAULTS.intro[l] || RM_DEFAULTS.intro.en; if (!(r.placeholder[l] || '').trim()) r.placeholder[l] = RM_DEFAULTS.placeholder[l] || RM_DEFAULTS.placeholder.en; });
+      if (!r.rows.length) r.rows.push([newBtn()]);
+    }
+  }); redraw(); }}), h('b', {}, ' Show a menu under the text field')));
+  if (!on) { b.append(h('div', {class: 'hint'}, 'OFF: the bot only has the buttons inside its messages.')); return; }
+
+  b.append(h('div', {class: 'row', style: 'margin:12px 0 8px'}, h('span', {class: 'mut', style: 'font-size:12px'}, 'Language:'),
+    cfg.langs.map(l => h('button', {class: l === editLang ? 'primary' : 'ghost', onclick: () => { setEditLang(l); redraw(); }}, l.toUpperCase()))));
+  b.append(field('Text inside the empty message box · ' + lname, inp(rm.placeholder[editLang] || '', v => edit(() => { ensure().placeholder[editLang] = v; }, {key: 'rmph' + editLang}), {maxlength: 64, placeholder: 'e.g. Menu'}), 'Greyed-out hint shown in the message box (max 64 characters).'));
+  b.append(field('Message sent with the menu · ' + lname, inp(rm.intro[editLang] || '', v => edit(() => { ensure().intro[editLang] = v; }, {key: 'rmin' + editLang}), {maxlength: 200, placeholder: '👇'}), 'Telegram needs a message to attach the buttons to. It is sent right before the start screen when someone presses /start.'));
+
+  b.append(h('h3', {style: 'margin:16px 0 6px'}, 'Buttons'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Up to 3 buttons per row and 8 rows. Each label must be unique. A language left empty uses the default language’s label.'));
+  rm.rows.forEach((row, ri) => {
+    const card = h('div', {class: 'card'});
+    row.forEach((bt, bi) => card.append(h('div', {class: 'row', style: 'margin-bottom:6px'},
+      h('div', {class: 'grow'}, inp(bt.label[editLang] || '', v => edit(() => { bt.label[editLang] = v; }, {key: `rml${ri}_${bi}${editLang}`}), {maxlength: 64, placeholder: 'Label · ' + lname})),
+      sel_(screenOptions(), bt.target, v => edit(() => { bt.target = v; })),
+      h('button', {class: 'ghost', title: 'Move left', disabled: bi === 0, onclick: () => { edit(() => { [row[bi - 1], row[bi]] = [row[bi], row[bi - 1]]; }); redraw(); }}, '◀'),
+      h('button', {class: 'ghost', title: 'Move right', disabled: bi === row.length - 1, onclick: () => { edit(() => { [row[bi + 1], row[bi]] = [row[bi], row[bi + 1]]; }); redraw(); }}, '▶'),
+      h('button', {class: 'ghost', title: 'Remove this button', onclick: () => { edit(() => { row.splice(bi, 1); if (!row.length) rm.rows.splice(ri, 1); }); redraw(); }}, '✕'))));
+    card.append(h('div', {class: 'row'},
+      row.length < 3 ? h('button', {onclick: () => { edit(() => { row.push(newBtn()); }); redraw(); }}, '＋ Button in this row') : null,
+      h('button', {class: 'ghost', disabled: ri === 0, onclick: () => { edit(() => { [rm.rows[ri - 1], rm.rows[ri]] = [rm.rows[ri], rm.rows[ri - 1]]; }); redraw(); }}, '↑ Row'),
+      h('button', {class: 'ghost', disabled: ri === rm.rows.length - 1, onclick: () => { edit(() => { [rm.rows[ri + 1], rm.rows[ri]] = [rm.rows[ri], rm.rows[ri + 1]]; }); redraw(); }}, '↓ Row')));
+    b.append(card);
+  });
+  if (rm.rows.length < 8) b.append(h('button', {onclick: () => { edit(() => { rm.rows.push([newBtn()]); }); redraw(); }}, '＋ Add a row'));
+
+  b.append(h('h3', {style: 'margin:18px 0 6px'}, 'What users see'),
+    h('div', {style: 'max-width:320px;border:1px solid var(--border);border-radius:10px;overflow:hidden'}, h('div', {class: 'rkb'}, h('div', {class: 'ph-in'}, rm.placeholder[editLang] || rm.placeholder[cfg.default_lang] || ''), ...rmKeyboardEl(rm.rows).children)),
+    h('div', {class: 'hint', style: 'margin-top:10px'}, 'Users who already started the bot get the menu the next time they press /start. Press Publish to apply your changes.'));
 }
 
 function sReferral(b, redraw) {

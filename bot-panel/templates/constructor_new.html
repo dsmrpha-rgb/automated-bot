@@ -24,7 +24,7 @@
   <div class="card" id="body"></div>
 </div>
 <script>
-const S = {step: 0, template: 'shop', name: '', display: '', langs: ['en'], tokens: [''], admins: [''], checks: {}, job: null};
+const S = {step: 0, template: 'shop', name: '', display: '', langs: ['en'], reply_menu: false, tokens: [''], admins: [''], checks: {}, job: null};
 const $ = s => document.querySelector(s);
 const STEPS = ['Type', 'Name', 'Telegram', 'Create'];
 function h(t, a, ...k) { const e = document.createElement(t); for (const [n, v] of Object.entries(a || {})) { if (v == null || v === false) continue; if (n === 'class') e.className = v; else if (n.startsWith('on')) e.addEventListener(n.slice(2), v); else if (n === 'value') e.value = v; else if (n === 'checked') e.checked = !!v; else e.setAttribute(n, v); } k.flat(9).forEach(x => x != null && x !== false && e.append(x.nodeType ? x : document.createTextNode(x))); return e; }
@@ -37,6 +37,8 @@ function draw() {
       [['shop', '🛍', 'Shop bot', 'Products, balance top-ups with crypto, orders, language picker. Ready to sell.'], ['shop_categories', '🗂', 'Shop with categories', 'City → category → listing → district → variant → payment, plus balance top-ups. You can add the simpler flow later too.'], ['blank', '📄', 'Blank bot', 'A single welcome screen. Build anything from scratch — menus, info pages, forms.']].map(([k, ic, n, d]) =>
         h('div', {class: 'opt' + (S.template === k ? ' on' : ''), onclick: () => { S.template = k; draw(); }}, h('div', {style: 'font-size:28px'}, ic), h('b', {}, n), h('span', {}, d)))));
     b.append(h('label', {class: 'f'}, 'Languages'), ...[['en', 'English'], ['ka', 'ქართული'], ['ru', 'Русский']].map(([l, n]) => h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: S.langs.includes(l), onchange: ev => { S.langs = ev.target.checked ? [...S.langs, l] : S.langs.filter(x => x !== l); }}), n)));
+    b.append(h('label', {class: 'f'}, 'Bottom menu'), h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: S.reply_menu, onchange: ev => { S.reply_menu = ev.target.checked; }}), 'Add a menu under the text field'),
+      h('div', {class: 'hint'}, 'Buttons that stay visible at the bottom of the chat, under the message box. Tapping one opens a screen you choose, which can have its own buttons as usual. You can add, change or remove it later in the builder (Settings → Bottom menu).'));
   } else if (S.step === 1) {
     b.append(h('h2', {}, 'Name your bot'),
       h('label', {class: 'f'}, 'Display name'), h('input', {value: S.display, placeholder: 'e.g. My Shop', oninput: ev => { S.display = ev.target.value; if (!S._nameTouched) { S.name = ev.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30); $('#nm').value = S.name; } }}),
@@ -52,7 +54,7 @@ function draw() {
     S.admins.forEach((a, i) => b.append(h('div', {class: 'tok'}, h('input', {value: a, placeholder: '123456789', oninput: ev => { S.admins[i] = ev.target.value.replace(/\D/g, ''); }}))));
     b.append(h('button', {class: 'btn btn-ghost btn-sm', onclick: () => { S.admins.push(''); draw(); }}, '＋ another admin'), h('div', {class: 'hint'}, 'Admins get the in-bot admin menu. Find your ID with @userinfobot.'));
   } else {
-    if (!S.job) { b.append(h('h2', {}, 'Ready to create'), h('div', {class: 'hint'}, `“${S.display || S.name}” — ${({shop: 'Shop bot', shop_categories: 'Shop bot with categories'})[S.template] || 'Blank bot'} · ${S.langs.join(', ')} · ${S.tokens.filter(Boolean).length} token(s)`), h('p', {class: 'hint'}, 'Setting up takes about a minute. The bot is registered in Global Admin automatically.')); }
+    if (!S.job) { b.append(h('h2', {}, 'Ready to create'), h('div', {class: 'hint'}, `“${S.display || S.name}” — ${({shop: 'Shop bot', shop_categories: 'Shop bot with categories'})[S.template] || 'Blank bot'} · ${S.langs.join(', ')} · ${S.tokens.filter(Boolean).length} token(s)${S.reply_menu ? ' · bottom menu' : ''}`), h('p', {class: 'hint'}, 'Setting up takes about a minute. The bot is registered in Global Admin automatically.')); }
     else { const p = h('div', {class: 'prog'}); b.append(h('h2', {}, S.job.status === 'done' ? '✅ Your bot is ready' : S.job.status === 'error' ? '❌ Something went wrong' : 'Creating your bot…'), p);
       if (S.job.error) b.append(h('div', {style: 'color:var(--red);margin-top:10px'}, S.job.error));
       if (S.job.status === 'done') b.append(h('div', {style: 'margin-top:16px;display:flex;gap:10px'}, h('a', {class: 'btn btn-primary', href: `/bot/${S.name}/constructor`}, 'Open the builder →'), h('a', {class: 'btn btn-ghost', href: '/global'}, 'Global Admin')));
@@ -69,7 +71,7 @@ async function next() {
   if (S.step < 3) { S.step++; draw(); return; }
   $('#next').disabled = true; $('#next').textContent = 'Creating…';
   try {
-    const r = await post('/constructor/api/create', {name: S.name, display_name: S.display || S.name, template: S.template, langs: S.langs, tokens: S.tokens.filter(Boolean), admins: S.admins.filter(Boolean)});
+    const r = await post('/constructor/api/create', {name: S.name, display_name: S.display || S.name, template: S.template, langs: S.langs, reply_menu: S.reply_menu, tokens: S.tokens.filter(Boolean), admins: S.admins.filter(Boolean)});
     S.job = {status: 'running', steps: []}; draw(); poll(r.job);
   } catch (e) { alert(e.message); $('#next').disabled = false; $('#next').textContent = '🚀 Create bot'; }
 }
