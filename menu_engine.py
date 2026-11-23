@@ -107,6 +107,7 @@ engine_router = Router(name="menu_engine")
 
 # The constructor looks for this marker to tell whether a bot's engine supports the bottom menu.
 REPLY_MENU_SUPPORT = True
+EXTRA_BUTTONS_SUPPORT = True     # extra messages (on_enter.send) can carry buttons and be sent after the screen
 
 # per-user session state: {user_id: {"vars": {...}, "await": {input cfg} | None}}
 SESSIONS: dict[int, dict] = {}
@@ -533,25 +534,47 @@ async def _run_on_enter(page: dict, uid: int, bot, target, lang: str, default_la
                 await bot.send_message(admin_id, text)
             except Exception:
                 pass
-    for extra in hook.get("send") or []:
-        if not isinstance(extra, dict):
+    await _send_extras(page, uid, bot, lang, default_lang, ctx, "before")
+
+
+async def _send_extras(page: dict, uid: int, bot, lang: str, default_lang: str, ctx: dict, phase: str) -> None:
+    """Send the page's extra messages whose timing matches `phase` ("before" or "after" the screen).
+
+    An extra message may carry buttons (`rows`, same format and actions as a screen's buttons)."""
+    for extra in (page.get("on_enter") or {}).get("send") or []:
+        if not isinstance(extra, dict) or (extra.get("when") == "after") != (phase == "after"):
             continue
         text = _fmt(_pick(extra.get("text", ""), lang, default_lang), ctx)
         img = _image_path(extra.get("image", ""))
+        kb = None
+        if extra.get("rows"):
+            built = _keyboard({"rows": extra["rows"]}, lang, default_lang, ctx, uid)
+            kb = built if built.inline_keyboard else None
+        pm = page.get("parse_mode") or None
         try:
             if img:
                 kind = _media_kind(img)
-                pm = page.get("parse_mode") or None
                 if kind == "video":
-                    await bot.send_video(uid, FSInputFile(img), caption=text or None, parse_mode=pm)
+                    await bot.send_video(uid, FSInputFile(img), caption=text or None, parse_mode=pm, reply_markup=kb)
                 elif kind == "animation":
-                    await bot.send_animation(uid, FSInputFile(img), caption=text or None, parse_mode=pm)
+                    await bot.send_animation(uid, FSInputFile(img), caption=text or None, parse_mode=pm, reply_markup=kb)
                 else:
-                    await bot.send_photo(uid, FSInputFile(img), caption=text or None, parse_mode=pm)
+                    await bot.send_photo(uid, FSInputFile(img), caption=text or None, parse_mode=pm, reply_markup=kb)
             elif text:
-                await bot.send_message(uid, text, parse_mode=page.get("parse_mode") or None)
+                await bot.send_message(uid, text, parse_mode=pm, reply_markup=kb)
         except Exception:
             pass
+
+
+async def _run_after_enter(page: dict, uid: int, bot, target, lang: str, default_lang: str) -> None:
+    """Extra messages set to be sent AFTER the screen itself."""
+    hook = page.get("on_enter")
+    if not isinstance(hook, dict) or not any(isinstance(x, dict) and x.get("when") == "after" for x in hook.get("send") or []):
+        return
+    ctx = await _context(uid, bot)
+    user = target.from_user
+    ctx["username"] = f"@{user.username}" if user.username else "no-username"
+    await _send_extras(page, uid, bot, lang, default_lang, ctx, "after")
 
 
 # ── rendering ────────────────────────────────────────────────────────────────
@@ -607,6 +630,7 @@ async def render_page(target, page_id: str, *, is_start: bool = False) -> None:
     img = picked_img or qr_override or _image_path(page.get("image", ""))
 
     await _emit(message, caption, parse_mode, kb, img, is_start=is_start)
+    await _run_after_enter(page, uid, bot, target, lang, default_lang)
 
 
 def _msg_kind(message) -> str:
