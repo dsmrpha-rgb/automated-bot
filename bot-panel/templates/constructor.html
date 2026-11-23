@@ -232,7 +232,7 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 // ══ state ═══════════════════════════════════════════════════════════════
 let cfg = null, publishedStr = '', sel = null, editLang = 'en', selBtn = null;   // selBtn = [row, col]
 let undoStack = [], redoStack = [], lastPush = 0;
-let envState = null, envOrig = '', sysStrings = {}, previewData = {products: [], districts: []}, images = [];
+let envState = null, envOrig = '', sysStrings = {}, previewData = {products: [], districts: []}, images = [], features = {};
 let view = {x: 40, y: 40, s: 1};
 let pv = {page: null, vars: {}, history: []};
 let showPhone = true;
@@ -254,7 +254,8 @@ function normalize(c) {
     if (p.input) p.input.error = ml(p.input.error);
     if (p.on_enter) {
       p.on_enter.notify_admins = ml(p.on_enter.notify_admins);
-      p.on_enter.send = (p.on_enter.send || []).map(x => ({text: ml(x.text), image: x.image || ''}));
+      p.on_enter.send = (p.on_enter.send || []).map(x => ({text: ml(x.text), image: x.image || '', when: x.when === 'after' ? 'after' : 'before',
+        rows: (x.rows || []).map(row => row.map(b => Object.assign({}, b, {label: ml(b.label), action: b.action || 'noop'})))}));
     }
     if (p.history) { p.history.line = ml(p.history.line); p.history.empty = ml(p.history.empty); if (p.history.fake) p.history.fake.line = ml(p.history.fake.line); }
   }
@@ -837,11 +838,53 @@ function automation(p) {
     h('div', {class: 'grow'}, inp(k, nv => { nv = nv.replace(/[^a-zA-Z0-9_]/g, ''); if (!nv || nv === k) return; edit(() => { const sv = p.on_enter.set_vars, out = {}; Object.keys(sv).forEach(x => out[x === k ? nv : x] = sv[x]); p.on_enter.set_vars = out; k = nv; }, {key: 'svk'}); })),
     h('div', {class: 'grow'}, inp(v, nv => edit(() => { p.on_enter.set_vars[k] = nv; }, {key: 'svv'}))),
     h('button', {class: 'ghost', onclick: () => edit(() => { delete p.on_enter.set_vars[k]; }, {inspector: true})}, '✕'))));
-  w.append(h('div', {class: 'row', style: 'margin-top:12px'}, h('b', {style: 'font-size:12px'}, 'Extra messages to the user'), h('span', {class: 'grow'}), h('button', {class: 'ghost', onclick: () => edit(() => { ensure().send = ensure().send || []; p.on_enter.send.push({text: {[cfg.default_lang]: ''}, image: ''}); }, {inspector: true})}, '＋ Add')));
+  w.append(h('div', {class: 'row', style: 'margin-top:12px'}, h('b', {style: 'font-size:12px'}, 'Extra messages to the user'), h('span', {class: 'grow'}), h('button', {class: 'ghost', onclick: () => edit(() => { ensure().send = ensure().send || []; p.on_enter.send.push(features.extra_buttons ? {text: {[cfg.default_lang]: ''}, image: '', when: 'after', rows: []} : {text: {[cfg.default_lang]: ''}, image: ''}); }, {inspector: true})}, '＋ Add')));
   ((oe && oe.send) || []).forEach((m, mi) => w.append(h('div', {class: 'card'}, textArea(m.text, p, {key: 'send' + mi, small: true, placeholder: 'Extra message text'}),
     h('div', {class: 'row', style: 'margin-top:6px'}, m.image ? h('span', {class: 'tag'}, (VIDEO_RE.test(m.image) ? '🎬 ' : '🖼 ') + m.image) : h('span', {class: 'mut', style: 'font-size:12px'}, 'No picture'),
       h('span', {class: 'grow'}), h('button', {onclick: () => openImagePicker(m.image, nm => edit(() => { m.image = nm; }, {inspector: true}))}, 'Media…'),
-      h('button', {class: 'ghost danger', onclick: () => edit(() => { p.on_enter.send.splice(mi, 1); }, {inspector: true})}, '✕')))));
+      h('button', {class: 'ghost danger', onclick: () => edit(() => { p.on_enter.send.splice(mi, 1); }, {inspector: true})}, '✕')), extraMessageOptions(p, m))));
+  return w;
+}
+
+function extraNewButton() { return {label: {[cfg.default_lang]: 'New button'}, action: 'noop'}; }
+function extraBubble(p, m) {
+  const mode = p.parse_mode || '', vars = sampleVars(p), bub = h('div', {class: 'bub'});
+  if (m.image) bub.append(mediaEl(m.image, {onerror: ev => ev.target.replaceWith(h('div', {class: 'noimg'}, '🖼 ' + m.image))}));
+  const tx = h('div', {class: 'tx'}); tx.innerHTML = tgHtml(fmtVars(firstText(m.text), vars), mode) || '<span style="opacity:.5">(no text)</span>'; bub.append(tx);
+  const kb = h('div', {class: 'kb'}, (m.rows || []).map(row => h('div', {class: 'kr'}, row.map(b => h('button', {title: actionSummary(b.action)}, fmtVars(b.label[editLang] || b.label[cfg.default_lang] || '·', vars))))));
+  return h('div', {style: 'margin-top:8px'}, h('div', {class: 'hint'}, 'What users see:'), h('div', {class: 'chat', style: 'background:transparent;padding:0;max-width:300px'}, bub, kb));
+}
+function extraMessageOptions(p, m) {
+  const w = h('div', {style: 'margin-top:8px'});
+  if (!features.extra_buttons) { w.append(h('div', {class: 'hint'}, 'Buttons and “send after the screen” need a newer engine — this bot was created before they existed, so its extra messages are plain text/media sent before the screen.')); return w; }
+  m.rows = m.rows || [];
+  w.append(h('div', {class: 'row'}, h('span', {class: 'mut', style: 'font-size:12px'}, 'Sent'), sel_([['before', 'before the screen'], ['after', 'after the screen']], m.when || 'before', v => edit(() => { m.when = v; }, {inspector: true}))));
+  w.append(h('div', {class: 'row', style: 'margin-top:8px'}, h('b', {style: 'font-size:12px'}, 'Buttons under this message'), h('span', {class: 'grow'}),
+    h('button', {class: 'ghost', onclick: () => edit(() => { m.rows.push([extraNewButton()]); }, {inspector: true})}, '＋ Row')));
+  if (!m.rows.length) w.append(h('div', {class: 'hint'}, 'No buttons — this is a plain message. Add a row to put buttons under it (open a screen, open a link).'));
+  m.rows.forEach((row, ri) => {
+    const box = h('div', {class: 'rowbox'});
+    row.forEach((b, bi) => {
+      const o = parseAction(b.action), simple = ['page', 'url', 'noop'].includes(o.kind), k = `xb${ri}_${bi}`;
+      box.append(h('div', {class: 'card', style: 'margin:0 0 6px'},
+        inp(b.label[editLang] || '', v => edit(() => { b.label[editLang] = v; }, {key: k + editLang}), {placeholder: 'Button label · ' + (LANG_NAMES[editLang] || editLang)}),
+        simple ? sel_([['page', '➜ Open a screen'], ['url', '🔗 Open a link'], ['noop', '⛔ Do nothing']], o.kind, v => edit(() => { b.action = buildAction({kind: v, target: v === 'page' ? (o.target || cfg.start_page) : undefined, url: v === 'url' ? (o.url || 'https://') : undefined}); }, {inspector: true}))
+               : h('div', {class: 'hint'}, 'Action kept as set: ' + actionSummary(b.action)),
+        o.kind === 'page' ? sel_([['', '— choose a screen —'], ...screenOptions()], o.target || '', v => edit(() => { b.action = buildAction({kind: 'page', target: v}); }, {inspector: true})) : null,
+        o.kind === 'url' ? inp(o.url || '', v => edit(() => { b.action = buildAction({kind: 'url', url: v.trim()}); }, {key: k + 'u'}), {placeholder: 'https://t.me/yourchannel'}) : null,
+        h('div', {class: 'row', style: 'margin-top:6px'},
+          h('button', {class: 'ghost', title: 'Move left', disabled: bi === 0, onclick: () => edit(() => { [row[bi - 1], row[bi]] = [row[bi], row[bi - 1]]; }, {inspector: true})}, '◀'),
+          h('button', {class: 'ghost', title: 'Move right', disabled: bi === row.length - 1, onclick: () => edit(() => { [row[bi + 1], row[bi]] = [row[bi], row[bi + 1]]; }, {inspector: true})}, '▶'),
+          h('span', {class: 'grow'}),
+          h('button', {class: 'ghost danger', title: 'Remove this button', onclick: () => edit(() => { row.splice(bi, 1); if (!row.length) m.rows.splice(ri, 1); }, {inspector: true})}, '✕'))));
+    });
+    box.append(h('div', {class: 'row', style: 'margin-bottom:8px'},
+      row.length < 4 ? h('button', {class: 'ghost', onclick: () => edit(() => { row.push(extraNewButton()); }, {inspector: true})}, '＋ Button in this row') : null, h('span', {class: 'grow'}),
+      h('button', {class: 'ghost', title: 'Move row up', disabled: ri === 0, onclick: () => edit(() => { [m.rows[ri - 1], m.rows[ri]] = [m.rows[ri], m.rows[ri - 1]]; }, {inspector: true})}, '↑ Row'),
+      h('button', {class: 'ghost', title: 'Move row down', disabled: ri === m.rows.length - 1, onclick: () => edit(() => { [m.rows[ri + 1], m.rows[ri]] = [m.rows[ri], m.rows[ri + 1]]; }, {inspector: true})}, '↓ Row')));
+    w.append(box);
+  });
+  w.append(extraBubble(p, m));
   return w;
 }
 
@@ -850,10 +893,10 @@ function duplicateScreen(id) {
 }
 function deleteScreen(id) {
   if (id === cfg.start_page) { toast('This is the start screen — make another screen the start screen first.', 'err'); return; }
-  let incoming = 0; Object.values(cfg.pages).forEach(q => { q.rows.flat().forEach(b => { if (actionTarget(b.action) === id) incoming++; }); if (q.input && q.input.next === id) incoming++; if (q.item_target === id) incoming++; });
+  let incoming = 0; Object.values(cfg.pages).forEach(q => { q.rows.flat().forEach(b => { if (actionTarget(b.action) === id) incoming++; }); ((q.on_enter && q.on_enter.send) || []).forEach(m => (m.rows || []).flat().forEach(b => { if (actionTarget(b.action) === id) incoming++; })); if (q.input && q.input.next === id) incoming++; if (q.item_target === id) incoming++; });
   if (!confirm(`Delete “${pname(id)}”?` + (incoming ? `\n\n${incoming} button(s) lead here — they will be set to “do nothing”.` : ''))) return;
   edit(() => {
-    Object.values(cfg.pages).forEach(q => { q.rows.flat().forEach(b => { if (actionTarget(b.action) === id) b.action = 'noop'; }); if (q.input && q.input.next === id) q.input.next = ''; if (q.item_target === id) q.item_target = ''; });
+    Object.values(cfg.pages).forEach(q => { q.rows.flat().forEach(b => { if (actionTarget(b.action) === id) b.action = 'noop'; }); ((q.on_enter && q.on_enter.send) || []).forEach(m => (m.rows || []).flat().forEach(b => { if (actionTarget(b.action) === id) b.action = 'noop'; })); if (q.input && q.input.next === id) q.input.next = ''; if (q.item_target === id) q.item_target = ''; });
     delete cfg.pages[id]; delete cfg._layout[id]; sel = null; selBtn = null;
   }, {inspector: true});
 }
@@ -951,6 +994,17 @@ function computeIssues() {
       if (o.kind === 'url' && !/^https?:\/\/\S{1,300}$/.test(o.url)) push('error', id, `Button “${bl}” on “${nm}” has an invalid link (must start with http:// or https://).`);
       if (['page', 'url', 'choose', 'confirm', 'buy', 'setlang'].includes(o.kind) === false && o.kind === 'noop') push('warn', id, `Button “${bl}” on “${nm}” does nothing.`);
     }));
+    ((p.on_enter && p.on_enter.send) || []).forEach(m => {
+      const rows = m.rows || [];
+      if (rows.some(r => r.length) && !Object.values(m.text || {}).some(v => (v || '').trim()) && !m.image) push('error', id, `An extra message with buttons on “${nm}” needs some text or a picture.`);
+      rows.forEach(row => row.forEach(b => {
+        const lab = b.label[cfg.default_lang] || Object.values(b.label).find(Boolean), o = parseAction(b.action), bl = lab || '(no label)';
+        if (!lab) push('error', id, `An extra message on “${nm}” has a button with no label.`);
+        if (o.kind === 'page') { if (!o.target) push('error', id, `Button “${bl}” in an extra message on “${nm}” doesn't open any screen yet.`); else if (!cfg.pages[o.target]) push('error', id, `Button “${bl}” in an extra message on “${nm}” opens a screen that no longer exists.`); else incoming[o.target] = 1; }
+        else if (['choose', 'confirm', 'buy', 'setlang'].includes(o.kind) && o.target) { if (!cfg.pages[o.target]) push('error', id, `Button “${bl}” in an extra message on “${nm}” opens a screen that no longer exists.`); else incoming[o.target] = 1; }
+        if (o.kind === 'url' && !/^https?:\/\/\S{1,300}$/.test(o.url)) push('error', id, `Button “${bl}” in an extra message on “${nm}” has an invalid link (must start with http:// or https://).`);
+      }));
+    });
     if (p.type === 'input') {
       if (!p.input || !p.input.var) push('error', id, `“${nm}” needs a name to save the answer under.`);
       else if (p.input.next) { if (!cfg.pages[p.input.next]) push('error', id, `“${nm}” continues to a missing screen.`); else incoming[p.input.next] = 1; }
@@ -1096,7 +1150,15 @@ function renderPreview() {
   ph.append(h('div', {class: 'ph'}, h('div', {class: 'av'}, '🤖'), h('span', {}, '@' + vars.bot_username),
     h('button', {class: 'ghost', title: 'Back', disabled: !pv.history.length, onclick: () => { pv.page = pv.history.pop(); renderPreview(); }}, '↩'),
     h('button', {class: 'ghost', title: 'Restart the chat at the start screen', onclick: () => { pv.vars = {}; pv.history = []; pv.page = cfg.start_page; renderPreview(); }}, '⟳')));
-  const chat = h('div', {class: 'chat'}, bub, kb);
+  const extraEls = m => {
+    const eb = h('div', {class: 'bub', style: 'margin-top:8px'});
+    if (m.image) eb.append(mediaEl(m.image, {onerror: ev => ev.target.replaceWith(h('div', {class: 'noimg'}, '🖼 ' + m.image))}));
+    const etx = h('div', {class: 'tx'}); etx.innerHTML = tgHtml(fmtVars(firstText(m.text), vars), mode) || '<span style="opacity:.5">(empty message)</span>'; eb.append(etx);
+    const ekb = h('div', {class: 'kb'}, (m.rows || []).map(row => h('div', {class: 'kr'}, row.map(b => { const lb = fmtVars(b.label[editLang] || b.label[cfg.default_lang] || '', vars), act = Object.assign(parseAction(b.action), {btnLabel: lb}); return h('button', {title: act.kind, onclick: () => pvPress(id, p, act)}, lb || '·'); }))));
+    return [eb, ekb];
+  };
+  const extras = features.extra_buttons ? ((p.on_enter && p.on_enter.send) || []) : [];
+  const chat = h('div', {class: 'chat'}, extras.filter(m => m.when !== 'after').flatMap(extraEls), bub, kb, extras.filter(m => m.when === 'after').flatMap(extraEls));
   if (p.type === 'input' && p.input) {
     const i = p.input, f = h('input', {placeholder: i.kind === 'number' ? 'Type a number…' : 'Type a reply…'});
     chat.append(h('div', {class: 'askbox'}, f, h('button', {onclick: () => pvAnswer(p, f.value, f)}, 'Send')), h('div', {class: 'phnote'}, `⌨ waiting for the answer → {${i.var}}`));
@@ -1430,7 +1492,8 @@ async function publish() {
 function fullRender() { renderTop(); renderCanvas(); renderInspector(); renderPreview(); }
 async function boot() {
   setupCanvasEvents();
-  const [c, env, ss, pd] = await Promise.all([api(B('/api/menu-config')), api(B('/api/env')).catch(() => null), api(B('/api/system-strings')).catch(() => ({strings: {}})), api(B('/api/preview-data')).catch(() => previewData), loadImages()]);
+  const [c, env, ss, pd, ft] = await Promise.all([api(B('/api/menu-config')), api(B('/api/env')).catch(() => null), api(B('/api/system-strings')).catch(() => ({strings: {}})), api(B('/api/preview-data')).catch(() => previewData), api(B('/api/features')).catch(() => ({})), loadImages()]);
+  features = ft || {};
   cfg = normalize(c.config || c); sysStrings = ss.strings || {}; previewData = pd;
   autoPosition(true);
   publishedStr = JSON.stringify(cfg);

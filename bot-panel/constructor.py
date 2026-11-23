@@ -141,8 +141,8 @@ def _ml(val, default_lang: str) -> dict:
     return {default_lang: ""}
 
 
-def _clean_hook(hook: dict, default_lang: str):
-    """Validate a page on_enter hook; None = invalid, {} = empty."""
+def _clean_hook(hook: dict, default_lang: str, pages: dict | None = None, langs: list | None = None, where: str = "page"):
+    """Validate a page on_enter hook; None = invalid image name, {} = empty. Raises ValueError(message) for bad extra-message buttons."""
     out: dict = {}
     note = _ml(hook.get("notify_admins", ""), default_lang)
     if any(v.strip() for v in note.values()):
@@ -157,15 +157,31 @@ def _clean_hook(hook: dict, default_lang: str):
         if clean:
             out["set_vars"] = clean
     sends = []
-    for extra in (hook.get("send") or [])[:10]:
+    for n, extra in enumerate((hook.get("send") or [])[:10], 1):
         if not isinstance(extra, dict):
             continue
         img = str(extra.get("image", "") or "")
         if img and (os.path.sep in img or ".." in img or img.startswith("/")):
             return None
         text = _ml(extra.get("text", ""), default_lang)
-        if img or any(v.strip() for v in text.values()):
-            sends.append({"text": text, "image": img})
+        has_content = bool(img or any(v.strip() for v in text.values()))
+        clean_rows: list = []
+        if extra.get("rows"):
+            ok, msg, clean_rows = _clean_button_rows(extra["rows"], pages or {}, langs or [default_lang], default_lang,
+                                                     f"{where} extra message {n}")
+            if not ok:
+                raise ValueError(msg)
+            if len(clean_rows) > 10 or any(len(r) > 8 for r in clean_rows):
+                raise ValueError(f"{where} extra message {n}: at most 10 rows with 8 buttons each")
+            if clean_rows and not has_content:
+                raise ValueError(f"{where} extra message {n}: a message with buttons needs some text or a picture")
+        if has_content:
+            item = {"text": text, "image": img}
+            if clean_rows:
+                item["rows"] = clean_rows
+            if extra.get("when") == "after":        # "before the screen" is the default and is not stored
+                item["when"] = "after"
+            sends.append(item)
     if sends:
         out["send"] = sends
     return out
@@ -350,6 +366,54 @@ def _clean_extras(cfg: dict, default_lang: str, page_ids: set):
 
 
 
+def _clean_button_rows(rows_in, pages: dict, langs: list, default_lang: str, where: str):
+    """Validate rows of inline buttons ([[{label, action}]]) for a screen or an extra message.
+
+    `where` prefixes error messages. Returns (ok, message, clean_rows).
+    """
+    if not isinstance(rows_in, list):
+        return False, f"{where}: rows must be a list", []
+    clean_rows = []
+    for row in rows_in:
+        if not isinstance(row, list):
+            return False, f"{where}: each row must be a list", []
+        clean_row = []
+        for btn in row:
+            if not isinstance(btn, dict):
+                return False, f"{where}: button malformed", []
+            label = btn.get("label", "")
+            if isinstance(label, str):
+                label = {default_lang: label}
+            elif isinstance(label, dict):
+                label = {k: str(v) for k, v in label.items()}
+            else:
+                label = {default_lang: ""}
+            action = str(btn.get("action", "noop"))
+            if not _ACTION_RE.match(action):
+                return False, f"{where}: invalid action '{action}'", []
+            tgt = _action_target_page(action)
+            if tgt is not None and tgt not in pages:
+                return False, f"{where}: button points to missing page '{tgt}'", []
+            if action.startswith("setlang:") and action.split(":")[1] not in langs:
+                return False, f"{where}: language button '{action.split(':')[1]}' is not one of the bot's languages", []
+            if action.startswith("buy:") and action.count(":") == 2 and action.split(":")[2] not in pages:
+                return False, f"{where}: buy button's low-balance screen '{action.split(':')[2]}' does not exist", []
+            if action.split(":", 1)[0] in ("page", "choose", "confirm", "buy") and len(action.encode()) > 58:
+                return False, (f"{where}: button action '{action}' is too long for Telegram (max ~58 characters) - "
+                               "use shorter screen ids"), []
+            clean_btn = {"label": label, "action": action}
+            if btn.get("style") in _STYLES:
+                clean_btn["style"] = btn["style"]
+            if btn.get("only_variant") in ("land", "building"):
+                clean_btn["only_variant"] = btn["only_variant"]
+            if btn.get("always") is True and action.startswith("buy:"):
+                clean_btn["always"] = True
+            clean_row.append(clean_btn)
+        if clean_row:
+            clean_rows.append(clean_row)
+    return True, "", clean_rows
+
+
 # ── validation / normalization of an incoming config ───────────────────────
 def _validate_config(cfg: dict) -> tuple[bool, str, dict]:
     if not isinstance(cfg, dict):
@@ -381,47 +445,9 @@ def _validate_config(cfg: dict) -> tuple[bool, str, dict]:
         else:
             text = {default_lang: ""}
 
-        rows_in = page.get("rows", [])
-        if not isinstance(rows_in, list):
-            return False, f"page '{pid}': rows must be a list", {}
-        clean_rows = []
-        for row in rows_in:
-            if not isinstance(row, list):
-                return False, f"page '{pid}': each row must be a list", {}
-            clean_row = []
-            for btn in row:
-                if not isinstance(btn, dict):
-                    return False, f"page '{pid}': button malformed", {}
-                label = btn.get("label", "")
-                if isinstance(label, str):
-                    label = {default_lang: label}
-                elif isinstance(label, dict):
-                    label = {k: str(v) for k, v in label.items()}
-                else:
-                    label = {default_lang: ""}
-                action = str(btn.get("action", "noop"))
-                if not _ACTION_RE.match(action):
-                    return False, f"page '{pid}': invalid action '{action}'", {}
-                tgt = _action_target_page(action)
-                if tgt is not None and tgt not in pages:
-                    return False, f"page '{pid}': button points to missing page '{tgt}'", {}
-                if action.startswith("setlang:") and action.split(":")[1] not in langs:
-                    return False, f"page '{pid}': language button '{action.split(':')[1]}' is not one of the bot's languages", {}
-                if action.startswith("buy:") and action.count(":") == 2 and action.split(":")[2] not in pages:
-                    return False, f"page '{pid}': buy button's low-balance screen '{action.split(':')[2]}' does not exist", {}
-                if action.split(":", 1)[0] in ("page", "choose", "confirm", "buy") and len(action.encode()) > 58:
-                    return False, (f"page '{pid}': button action '{action}' is too long for Telegram (max ~58 characters) - "
-                                   "use shorter screen ids"), {}
-                clean_btn = {"label": label, "action": action}
-                if btn.get("style") in _STYLES:
-                    clean_btn["style"] = btn["style"]
-                if btn.get("only_variant") in ("land", "building"):
-                    clean_btn["only_variant"] = btn["only_variant"]
-                if btn.get("always") is True and action.startswith("buy:"):
-                    clean_btn["always"] = True
-                clean_row.append(clean_btn)
-            if clean_row:
-                clean_rows.append(clean_row)
+        ok, msg, clean_rows = _clean_button_rows(page.get("rows", []), pages, langs, default_lang, f"page '{pid}'")
+        if not ok:
+            return False, msg, {}
 
         img = str(page.get("image", "") or "")
         if img and (os.path.sep in img or ".." in img or img.startswith("/")):
@@ -526,7 +552,10 @@ def _validate_config(cfg: dict) -> tuple[bool, str, dict]:
 
         hook = page.get("on_enter")
         if isinstance(hook, dict):
-            clean_hook = _clean_hook(hook, default_lang)
+            try:
+                clean_hook = _clean_hook(hook, default_lang, pages, langs, f"page '{pid}'")
+            except ValueError as e:
+                return False, str(e), {}
             if clean_hook is None:
                 return False, f"page '{pid}': invalid on_enter image name", {}
             if clean_hook:
@@ -599,7 +628,7 @@ def bot_features(name):
         engine = (_bot_dir(bot) / "menu_engine.py").read_text(encoding="utf-8")
     except OSError:
         engine = ""
-    return jsonify({"reply_menu": "REPLY_MENU_SUPPORT" in engine})
+    return jsonify({"reply_menu": "REPLY_MENU_SUPPORT" in engine, "extra_buttons": "EXTRA_BUTTONS_SUPPORT" in engine})
 
 
 @constructor_bp.route("/bot/<name>/api/menu-config", methods=["POST"])
