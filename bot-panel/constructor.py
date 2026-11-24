@@ -191,7 +191,7 @@ _RM_MAX_ROWS, _RM_MAX_PER_ROW = 8, 3
 
 
 def _clean_reply_menu(rm: dict, langs: list, default_lang: str, page_ids: set):
-    """Static bottom menu: {enabled, placeholder, intro, rows: [[{label, target}]]}. Returns (ok, message, cleaned).
+    """Static bottom menu: {enabled, placeholder, rows: [[{label, target}]]}. Returns (ok, message, cleaned).
 
     The rules are enforced only while it is switched on, so a half-built menu can be saved switched off.
     """
@@ -240,11 +240,9 @@ def _clean_reply_menu(rm: dict, langs: list, default_lang: str, page_ids: set):
                     if owner.setdefault(text, (ri, bi)) != (ri, bi):
                         return False, f"bottom menu: two buttons use the label “{text}”", {}
     out = {"enabled": enabled, "rows": rows}
-    placeholder, intro = texts(rm.get("placeholder", ""), 64), texts(rm.get("intro", ""), 200)
+    placeholder = texts(rm.get("placeholder", ""), 64)
     if placeholder:
         out["placeholder"] = placeholder
-    if intro:
-        out["intro"] = intro
     return True, "", out
 
 
@@ -1185,7 +1183,6 @@ def default_reply_menu(langs: list[str], start_page: str) -> dict:
     return {
         "enabled": True,
         "placeholder": ml("Menu", "მენიუ", "Меню"),
-        "intro": ml("👇 Use the menu below", "👇 გამოიყენეთ ქვედა მენიუ", "👇 Используйте меню ниже"),
         "rows": [[{"label": ml("🏠 Main menu", "🏠 მთავარი მენიუ", "🏠 Главное меню"), "target": start_page}]],
     }
 

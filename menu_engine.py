@@ -1255,11 +1255,15 @@ async def _sync_reply_menu(message: Message, uid: int) -> None:
     try:
         kb = _reply_menu_markup(uid, cfg)
         if kb:
-            lang, default_lang = _lang(uid, cfg), cfg.get("default_lang", "ka")
-            intro = _pick(cfg["reply_menu"].get("intro", ""), lang, default_lang).strip() or "👇"
-            await message.answer(intro, reply_markup=kb)
+            # Telegram can only attach a bottom keyboard to a message. Send a carrier and delete it at once:
+            # the keyboard stays, and the user sees nothing but the real screens.
+            carrier = await message.answer("⌨", reply_markup=kb)
             if not ds.has_reply_kb(uid):
                 ds.set_reply_kb(uid, True)
+            try:
+                await carrier.delete()
+            except Exception:
+                pass
         elif ds.has_reply_kb(uid):      # switched off in the constructor: take the old keyboard away, once
             gone = await message.answer("⌨", reply_markup=ReplyKeyboardRemove())
             ds.set_reply_kb(uid, False)

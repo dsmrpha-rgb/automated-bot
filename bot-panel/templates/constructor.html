@@ -263,7 +263,7 @@ function normalize(c) {
   c._layout = c._layout || {};
   c.strings = c.strings || {};
   c.admin_menu = c.admin_menu || {hidden: []};
-  if (c.reply_menu) { const r = c.reply_menu; r.placeholder = ml(r.placeholder); r.intro = ml(r.intro); r.rows = (r.rows || []).map(row => row.map(b => ({label: ml(b.label), target: b.target || ''}))); }
+  if (c.reply_menu) { const r = c.reply_menu; r.placeholder = ml(r.placeholder); delete r.intro; r.rows = (r.rows || []).map(row => row.map(b => ({label: ml(b.label), target: b.target || ''}))); }
   c.payments = c.payments || {};
   return c;
 }
@@ -1282,7 +1282,6 @@ function sGate(b, redraw) {
 
 let rmSupported = null;
 const RM_DEFAULTS = {
-  intro: {en: '👇 Use the menu below', ka: '👇 გამოიყენეთ ქვედა მენიუ', ru: '👇 Используйте меню ниже'},
   placeholder: {en: 'Menu', ka: 'მენიუ', ru: 'Меню'},
 };
 function rmLabel(bt) { return bt.label[editLang] || bt.label[cfg.default_lang] || Object.values(bt.label).find(Boolean) || ''; }
@@ -1301,12 +1300,12 @@ function sBottomMenu(b, redraw) {
     return;
   }
   const rm = cfg.reply_menu, on = !!(rm && rm.enabled), lname = LANG_NAMES[editLang] || editLang;
-  const ensure = () => { if (!cfg.reply_menu) cfg.reply_menu = {enabled: false, placeholder: {}, intro: {}, rows: []}; const r = cfg.reply_menu; r.placeholder = r.placeholder || {}; r.intro = r.intro || {}; r.rows = r.rows || []; return r; };
+  const ensure = () => { if (!cfg.reply_menu) cfg.reply_menu = {enabled: false, placeholder: {}, rows: []}; const r = cfg.reply_menu; r.placeholder = r.placeholder || {}; r.rows = r.rows || []; return r; };
   const newBtn = () => { const n = ensure().rows.reduce((a, r) => a + r.length, 0) + 1; return {label: Object.fromEntries(cfg.langs.map(l => [l, 'Button ' + n])), target: cfg.start_page}; };
   b.append(h('label', {class: 'chk'}, h('input', {type: 'checkbox', checked: on, onchange: ev => { edit(() => {
     const r = ensure(); r.enabled = ev.target.checked;
     if (r.enabled) {
-      cfg.langs.forEach(l => { if (!(r.intro[l] || '').trim()) r.intro[l] = RM_DEFAULTS.intro[l] || RM_DEFAULTS.intro.en; if (!(r.placeholder[l] || '').trim()) r.placeholder[l] = RM_DEFAULTS.placeholder[l] || RM_DEFAULTS.placeholder.en; });
+      cfg.langs.forEach(l => { if (!(r.placeholder[l] || '').trim()) r.placeholder[l] = RM_DEFAULTS.placeholder[l] || RM_DEFAULTS.placeholder.en; });
       if (!r.rows.length) r.rows.push([newBtn()]);
     }
   }); redraw(); }}), h('b', {}, ' Show a menu under the text field')));
@@ -1315,7 +1314,6 @@ function sBottomMenu(b, redraw) {
   b.append(h('div', {class: 'row', style: 'margin:12px 0 8px'}, h('span', {class: 'mut', style: 'font-size:12px'}, 'Language:'),
     cfg.langs.map(l => h('button', {class: l === editLang ? 'primary' : 'ghost', onclick: () => { setEditLang(l); redraw(); }}, l.toUpperCase()))));
   b.append(field('Text inside the empty message box · ' + lname, inp(rm.placeholder[editLang] || '', v => edit(() => { ensure().placeholder[editLang] = v; }, {key: 'rmph' + editLang}), {maxlength: 64, placeholder: 'e.g. Menu'}), 'Greyed-out hint shown in the message box (max 64 characters).'));
-  b.append(field('Message sent with the menu · ' + lname, inp(rm.intro[editLang] || '', v => edit(() => { ensure().intro[editLang] = v; }, {key: 'rmin' + editLang}), {maxlength: 200, placeholder: '👇'}), 'Telegram needs a message to attach the buttons to. It is sent right before the start screen when someone presses /start.'));
 
   b.append(h('h3', {style: 'margin:16px 0 6px'}, 'Buttons'), h('div', {class: 'hint', style: 'margin:0 0 8px'}, 'Up to 3 buttons per row and 8 rows. Each label must be unique. A language left empty uses the default language’s label.'));
   rm.rows.forEach((row, ri) => {
