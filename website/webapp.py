@@ -119,7 +119,9 @@ def city_page(city):
     cats = S.city_categories(city)
     if not cats:
         return redirect(url_for("products", city=city, cat="-"))
-    return render_template("categories.html", city=city, cats=cats)
+    page = request.args.get("rp", 1, type=int)
+    revs, pages, total = S.reviews(page)
+    return render_template("categories.html", city=city, cats=cats, revs=revs, pages=pages, page=page, total=total)
 
 
 @app.route("/city/<city>/<cat>")

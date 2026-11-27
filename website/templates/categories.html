@@ -6,4 +6,5 @@
 <section aria-labelledby="shop-categories-title" class="shop-category-section"><h2 id="shop-categories-title">Выберите категорию</h2>
 <div class="shop-grid shop-grid--categories">{% for k, c in cats.items() %}
 <article class="shop-card shop-category-card"><a class="shop-card__link" href="{{ url_for('products', city=city, cat=k) }}">{{ card_media(media_url(c.image) if c.image else '') }}<div class="shop-card__body"><div class="shop-category-card__title"><h3>{{ c.name }}</h3><span aria-hidden="true" class="shop-icon-button">→</span></div></div></a></article>
-{% endfor %}</div></section></div></div>{% endblock %}
+{% endfor %}</div></section></div>
+{% include "_reviews.html" %}</div>{% endblock %}
