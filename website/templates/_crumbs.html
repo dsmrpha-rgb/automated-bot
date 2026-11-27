@@ -1,0 +1,2 @@
+{% macro crumbs(items) %}<nav aria-label="Путь по каталогу" class="shop-breadcrumbs"><ol><li><a href="{{ url_for('index') }}">Магазин</a></li>{% for label, href in items %}<li>{% if href %}<a href="{{ href }}">{{ label }}</a>{% else %}<span aria-current="page">{{ label }}</span>{% endif %}</li>{% endfor %}</ol></nav>{% endmacro %}
+{% macro card_media(src) %}<div class="shop-media shop-card__media">{% if src %}<img alt="" loading="lazy" decoding="async" src="{{ src }}">{% else %}<span aria-hidden="true" class="shop-media__placeholder"></span>{% endif %}</div>{% endmacro %}

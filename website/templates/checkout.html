@@ -1,26 +1,24 @@
-{% extends "base.html" %}{% block body %}
-<section class="box head"><div><div class="kick">Последний шаг</div><h1>Оформление заказа</h1><div class="sub">Проверьте выбранный товар и подтвердите покупку</div></div>
-<a class="btn2" href="{{ url_for('districts', slug=slug, variant=variant) }}">👈 Back - უკან</a></section>
-<div class="co">
- <section class="box" style="overflow:hidden"><div class="hero" style="background-image:url('{{ img }}')">{% if p.weight %}<span class="tag r">Weight - წონა: {{ p.weight }}</span>{% endif %}<div class="cap"><small>ВЫ ВЫБРАЛИ</small><h2>{{ p.name }}</h2></div></div>
-  <div class="facts"><div class="fact"><span class="fmark">◉</span><div><small>Локация получения</small><b>{{ p.city }} · {{ d.name }}</b></div></div>
-  <div class="fact v"><small>Вариант</small><b>{{ VARIANTS[variant] }}</b></div></div></section>
- <aside class="box sum"><span class="pill">Заказ готов к оформлению</span><h3>Подтверждение</h3><div class="sub">Проверьте итоговую сумму перед оплатой</div>
-  <div class="kv"><span>Товар</span><b>{{ p.name }}</b>{% if p.weight %}<span>Weight - წონა:</span><b>{{ p.weight }}</b>{% endif %}<span>Вариант</span><b>{{ VARIANTS[variant] }}</b><span>Район</span><b>{{ d.name }}</b></div>
-  <div class="total"><small>К оплате</small><big>{{ money(price) }}</big>{% if crypto %}<em>≈ {{ crypto }}</em>{% endif %}</div>
-  {% if not me %}
-   <div class="need"><i>→</i><div><b>Сначала войдите в аккаунт</b><small>Авторизация нужна для оплаты и сохранения заказа</small></div></div>
-   <ul class="steps"><li>1. Registration - რეგისტრაცია</li><li>2. Fill up Balance - შეავსეთ ბალანსი</li><li>3. Buy Product - იყიდეთ პროდუქტი</li></ul>
-   <a class="btn big" href="{{ url_for('register', next=request.full_path) }}">Registration - რეგისტრაცია</a>
-   <a class="btn2 big" style="width:100%;margin-top:8px;display:flex" href="{{ url_for('login', next=request.full_path) }}">Sign In - შესვლა</a>
-  {% elif soldout %}<div class="need"><i>✕</i><div><b>Нет в наличии</b><small>Out of stock · არ არის მარაგში</small></div></div>
-  {% elif enough %}
-   <div class="need"><i>✓</i><div><b>Баланс: {{ money(me.balance) }}</b><small>Сумма будет списана с баланса</small></div></div>
-   <form method="post" action="{{ url_for('buy') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="p" value="{{ slug }}"><input type="hidden" name="v" value="{{ variant }}"><input type="hidden" name="d" value="{{ did }}">
-   <button class="btn big">Buy Product - იყიდეთ პროდუქტი</button></form>
-  {% else %}
-   <div class="need"><i>!</i><div><b>Недостаточно средств: {{ money(me.balance) }}</b><small>Fill up Balance - შეავსეთ ბალანსი</small></div></div>
-   <a class="btn big" href="{{ url_for('account') }}">Fill up Balance - შეავსეთ ბალანსი</a>
-  {% endif %}</aside>
-</div>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs %}{% block main %}
+<div class="site-shell shop-page">
+{{ crumbs([(p.city|capitalize, url_for('city_page', city=p.city)), (p.name, url_for('districts', slug=slug, variant=variant)), ('Оформление заказа', None)]) }}
+{% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="shop-note {{ 'shop-note--success' if cat == 'ok' else 'shop-note--warning' }}" role="alert" style="margin-block-end:1rem">{{ msg }}</div>{% endfor %}
+<div class="shop-purchase">
+<article class="shop-panel shop-purchase-product shop-purchase-product--checkout"><div class="shop-media shop-purchase-product__media">{% if real_image(p, none) %}<img alt="" decoding="async" src="{{ real_image(p, none) }}">{% else %}<span aria-hidden="true" class="shop-media__placeholder"></span>{% endif %}</div>
+<div class="shop-panel__body"><p class="shop-purchase-product__name">{{ p.name }}</p></div>
+<dl class="shop-details shop-purchase-product__details"><div><dt>Вариант</dt><dd>{{ VARIANTS[variant] }}</dd></div><div><dt>Место получения</dt><dd>{{ p.city|capitalize }} · {{ d.name }}</dd></div>{% if p.weight %}<div><dt>Weight - წონა:</dt><dd>{{ p.weight }}</dd></div>{% endif %}</dl></article>
+<section aria-labelledby="shop-summary-title" class="shop-panel shop-purchase-stage shop-summary"><div class="shop-panel__body">
+<ol aria-label="Этапы заказа" class="shop-purchase-steps"><li class="is-complete">Вариант</li><li class="is-complete">Район</li><li aria-current="step">Оплата</li></ol>
+<h1 id="shop-summary-title">Оформление заказа</h1>
+<div class="shop-summary__total"><span>К оплате</span><div><strong class="shop-price shop-price--large">{{ money(price) }}</strong>{% if crypto %}<small class="shop-price-alt">≈ {{ crypto }}</small>{% endif %}</div></div>
+{% if not me %}
+<div class="shop-note"><strong>Войдите, чтобы оформить заказ</strong><p>1. Registration - რეგისტრაცია</p><p>2. Fill up Balance - შეავსეთ ბალანსი</p><p>3. Buy Product - იყიდეთ პროდუქტი</p></div>
+<div class="shop-summary__actions"><a class="btn shop-button shop-button--primary w-100" href="{{ url_for('login', next=request.full_path) }}">Sign In - შესვლა☕️</a><a class="btn shop-button shop-button--secondary w-100" href="{{ url_for('register', next=request.full_path) }}">Registration - რეგისტრაცია </a></div>
+{% elif soldout %}<div class="shop-note shop-note--warning"><strong>Нет в наличии</strong><p>Out of stock · არ არის მარაგში</p></div>
+{% elif enough %}
+<div class="shop-summary__balance"><span class="shop-muted">Ваш баланс</span><strong>{{ money(me.balance) }}</strong></div>
+<form method="post" action="{{ url_for('buy') }}" class="shop-summary__actions"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="p" value="{{ slug }}"><input type="hidden" name="v" value="{{ variant }}"><input type="hidden" name="d" value="{{ did }}"><button class="btn shop-button shop-button--primary shop-button--large w-100">Buy Product - იყიდეთ პროდუქტი</button></form>
+{% else %}
+<div class="shop-note shop-note--warning"><strong>Недостаточно средств: {{ money(me.balance) }}</strong><p>Fill up Balance - შეავსეთ ბალანსი</p></div>
+<div class="shop-summary__actions"><a class="btn shop-button shop-button--primary w-100" href="{{ url_for('account') }}">Fill up Balance - შეავსეთ ბალანსი</a></div>
+{% endif %}
+</div></section></div></div>{% endblock %}

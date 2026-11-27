@@ -1,8 +1,16 @@
-{% extends "base.html" %}{% block body %}
-<section class="box head"><div><div class="kick">Заказ #{{ o.id }}</div><h1>{{ o.product }}</h1><div class="sub">{{ o.note }} · {{ o.date }} · {{ money(o.price_usd) }}</div></div><a class="btn2" href="{{ url_for('account') }}">👈 Back - უკან</a></section>
-<section class="box" style="padding:18px"><h3 style="margin:0">Your order - თქვენი შეკვეთა ✅</h3>
-{% if dv.text or dv.image %}<div class="dl">{% if dv.text %}{{ dv.text }}{% endif %}{% if dv.image %}{% if dv.image.lower().endswith(('.mp4','.mov','.webm','.m4v')) %}<video src="{{ url_for('order_file', pid=o.id) }}" controls playsinline></video>{% else %}<img src="{{ url_for('order_file', pid=o.id) }}" alt="">{% endif %}{% endif %}</div>{% else %}<div class="sub" style="margin:10px 0">An admin will send the details soon.</div>{% endif %}
-<h3 style="margin:18px 0 6px;font-size:13px">Leave a review - დაწერეთ შეფასება</h3>
-<form method="post" action="{{ url_for('review', pid=o.id) }}" class="f" style="padding:0;max-width:520px"><input type="hidden" name="csrf" value="{{ csrf }}">
-<input name="text" maxlength="600" placeholder="Your comment - თქვენი კომენტარი" required><button class="btn">Send - გაგზავნა</button></form></section>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs %}{% block main %}
+<div class="site-shell shop-page">
+{{ crumbs([('Аккаунт', url_for('account')), ('Заказ #' ~ o.id, None)]) }}
+{% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="shop-note {{ 'shop-note--success' if cat == 'ok' else 'shop-note--warning' }}" role="alert" style="margin-block-end:1rem">{{ msg }}</div>{% endfor %}
+<article class="shop-panel shop-order"><div class="shop-order__top"><div><span class="shop-stock">Оплачен</span><h1>{{ o.product }}</h1><time class="shop-muted">{{ o.date }}</time></div><strong class="shop-price shop-price--large">{{ money(o.price_usd) }}</strong></div>
+<p class="shop-order__location">{{ o.note }}</p>
+<div class="shop-order__details"><h2 style="font-size:1.15rem">Your order - თქვენი შეკვეთა ✅</h2>
+{% if dv.text or dv.image %}<div class="shop-order__overview{% if dv.image %} shop-order__overview--with-media{% endif %}">
+{% if dv.text %}<div class="shop-order__description"><p style="white-space:pre-wrap;margin:0">{{ dv.text }}</p></div>{% endif %}
+{% if dv.image %}{% if dv.image.lower().endswith(('.mp4','.mov','.webm','.m4v')) %}<video class="shop-order__main-media" src="{{ url_for('order_file', pid=o.id) }}" controls playsinline style="width:100%"></video>{% else %}<div class="shop-media shop-order__main-media"><img alt="" src="{{ url_for('order_file', pid=o.id) }}"></div>{% endif %}{% endif %}</div>
+{% else %}<p class="shop-muted">An admin will send the details soon.</p>{% endif %}</div>
+</article>
+<section class="shop-panel shop-order-review"><div class="shop-panel__body"><h2 style="font-size:1.15rem">Leave a review - დაწერეთ შეფასება</h2>
+<form method="post" action="{{ url_for('review', pid=o.id) }}" class="shop-form"><input type="hidden" name="csrf" value="{{ csrf }}"><div class="shop-form__field"><label class="form-label" for="rv">Your comment - თქვენი კომენტარი</label><textarea class="form-control" id="rv" name="text" maxlength="600" rows="3" required></textarea></div>
+<button class="btn shop-button shop-button--primary">Send - გაგზავნა</button></form></div></section>
+</div>{% endblock %}

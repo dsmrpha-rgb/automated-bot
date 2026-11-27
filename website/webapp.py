@@ -30,7 +30,7 @@ def csrf_token() -> str:
 
 @app.before_request
 def guard():
-    if not S.site_settings().get("enabled", True) and request.endpoint not in ("static",):
+    if not S.site_settings().get("enabled", True) and request.endpoint not in ("static", "favicon"):
         return render_template("closed.html"), 503
     if request.method == "POST" and not secrets.compare_digest(request.form.get("csrf", ""), session.get("csrf", "x")):
         abort(400)
@@ -60,7 +60,8 @@ def safe_next(target: str) -> str:
 @app.context_processor
 def inject():
     return dict(site=S.site_settings(), me=current_user(), csrf=csrf_token(), money=S.money, VARIANTS=S.VARIANTS,
-                media=lambda n: url_for("media", name=n) if n else "")
+                media=lambda n: url_for("media", name=n) if n else "", media_url=lambda n: url_for("media", name=n) if S.media_file(n or "") else "",
+                all_cities=S.cities())
 
 
 def product_image(p: dict, cat: dict | None = None) -> str:
@@ -72,6 +73,18 @@ def product_image(p: dict, cat: dict | None = None) -> str:
 
 
 app.jinja_env.globals["product_image"] = product_image
+
+
+def real_image(p: dict, cat: dict | None = None) -> str:
+    """Product/category/default picture URL, or '' when none is set (the theme then shows a placeholder)."""
+    for n in (p.get("image"), (cat or {}).get("image")):
+        if S.media_file(n or ""):
+            return url_for("media", name=n)
+    d = S.site_settings().get("default_image")
+    return url_for("media", name=d) if S.media_file(d or "") else ""
+
+
+app.jinja_env.globals["real_image"] = real_image
 
 
 def crumbs(city=None, cat=None, product=None, variant=None):
@@ -88,6 +101,11 @@ def crumbs(city=None, cat=None, product=None, variant=None):
 
 
 # ── catalogue ────────────────────────────────────────────────────────────────
+@app.route("/favicon.ico")
+def favicon():
+    return redirect(url_for("static", filename="favicon.ico"), code=301)
+
+
 @app.route("/")
 def index():
     cs = S.settings_cities()
@@ -119,7 +137,7 @@ def products(city, cat):
     rows = [(k, p, S.crypto_amount(p.get("price_usd", 0), coin)) for k, p in items.items() if p.get("districts")]
     page = request.args.get("rp", 1, type=int)
     revs, pages, total = S.reviews(page)
-    return render_template("products.html", city=city, cat=cat, cobj=cobj, rows=rows, crumb=crumbs(city, cname),
+    return render_template("products.html", city=city, cat=cat, cobj=cobj, rows=rows, cats_all=S.city_categories(city), crumb=crumbs(city, cname),
                            revs=revs, pages=pages, page=page, total=total)
 
 

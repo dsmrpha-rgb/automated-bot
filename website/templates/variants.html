@@ -1,6 +1,11 @@
-{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
-{{ head(crumb=crumb, back=url_for('products', city=p.city, cat=p.category if p.category else '-')) }}
-<div class="grid">{% for v in vs %}
- <a class="box card" href="{{ url_for('districts', slug=slug, variant=v) }}"><div class="pic"><img src="{{ product_image(p, cat) }}" alt="">{% if p.weight %}<span class="tag r">Weight - წონა: {{ p.weight }}</span>{% endif %}<span class="price">{{ money(p.price_usd) }}</span></div>
- <div class="nm">{{ VARIANTS[v] }}</div><span class="btn go">Choose District - აირჩიეთ უბანი</span></a>{% endfor %}</div>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs %}{% block main %}
+<div class="site-shell shop-page">
+{% set trail = [(p.city|capitalize, url_for('city_page', city=p.city))] %}{% if cat.name %}{% set trail = trail + [(cat.name, url_for('products', city=p.city, cat=p.category))] %}{% endif %}{{ crumbs(trail + [(p.name, None)]) }}
+<div class="shop-purchase">
+<article class="shop-panel shop-purchase-product"><div class="shop-media shop-purchase-product__media">{% if real_image(p, cat) %}<img alt="" decoding="async" src="{{ real_image(p, cat) }}">{% else %}<span aria-hidden="true" class="shop-media__placeholder"></span>{% endif %}</div>
+<div class="shop-panel__body"><span class="shop-stock">{{ 'Нет в наличии' if p.quantity == 0 else 'В наличии' }}</span><h1 class="shop-purchase-product__name">{{ p.name }}</h1><strong class="shop-price shop-price--large">{{ money(p.price_usd) }}</strong>{% if p.weight %}<small class="shop-purchase-product__weight">Weight - წონა: {{ p.weight }}</small>{% endif %}</div></article>
+<section aria-labelledby="shop-variant-title" class="shop-panel shop-purchase-stage"><div class="shop-panel__body">
+<ol aria-label="Этапы заказа" class="shop-purchase-steps"><li aria-current="step">Вариант</li><li>Район</li><li>Оплата</li></ol>
+<h2 id="shop-variant-title">Выберите вариант</h2>
+<div class="shop-option-list">{% for v in vs %}<a class="shop-option" href="{{ url_for('districts', slug=slug, variant=v) }}"><span class="shop-option__body"><strong>{{ VARIANTS[v] }}</strong><small>Выбрать район</small></span><span aria-hidden="true" class="shop-option__arrow">→</span></a>{% endfor %}</div>
+</div></section></div></div>{% endblock %}

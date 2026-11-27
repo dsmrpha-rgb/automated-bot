@@ -1,9 +1,13 @@
-{% extends "base.html" %}{% block body %}
-<div class="box auth"><h1>Sign Up - შესვლა</h1>
-<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}">
-<label style="text-align:center">Login - ლოგინი</label><input name="login" autocomplete="username" required autofocus pattern="[A-Za-z0-9_.\-]{3,32}">
-<label style="text-align:center">Pass - პაროლი</label><input name="password" type="password" autocomplete="new-password" placeholder="Enter Password - შეიყვანეთ პაროლი" minlength="6" required>
-<label style="text-align:center">Confirm password - დაადასტურეთ პაროლი</label><input name="password2" type="password" autocomplete="new-password" placeholder="Confirm Password - დაადასტურეთ პაროლი" minlength="6" required>
-<button class="go">Registration - რეგისტრაცია</button></form>
-<div class="note">Confirm Registration - დაადასტურეთ რეგისტრაცია</div></div>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs %}{% block main %}
+<div class="site-shell shop-page">
+{{ crumbs([('Sign Up - შესვლა', None)]) }}
+{% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="shop-note shop-note--warning" role="alert" style="margin-block-end:1rem">{{ msg }}</div>{% endfor %}
+<div class="shop-auth shop-auth--single"><section aria-labelledby="shop-auth-title" class="shop-panel shop-auth__form"><div class="shop-panel__body">
+<h1 id="shop-auth-title">Sign Up - შესვლა</h1>
+<form class="shop-form" method="post" accept-charset="UTF-8"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="shop-form__field"><label class="form-label" for="site_user_login">Login - ლოგინი</label><input autofocus class="form-control" autocomplete="username" type="text" name="login" id="site_user_login" required pattern="[A-Za-z0-9_.\-]{3,32}" title="3–32: A–Z, 0–9, _ . -"></div>
+<div class="shop-form__field"><label class="form-label" for="site_user_password">Pass - პაროლი</label><input autocomplete="new-password" class="form-control" type="password" name="password" id="site_user_password" minlength="6" required></div>
+<div class="shop-form__field"><label class="form-label" for="site_user_password_confirmation">Confirm Password - დაადასტურეთ პაროლი</label><input autocomplete="new-password" class="form-control" type="password" name="password2" id="site_user_password_confirmation" minlength="6" required></div>
+<input type="submit" value="Registration - რეგისტრაცია " class="btn shop-button shop-button--primary w-100"></form>
+<div class="shop-auth__switch"><span>Уже есть аккаунт?</span><a class="shop-text-link" href="{{ url_for('login', next=request.args.get('next','')) }}">Sign In - შესვლა☕️</a></div>
+</div></section></div></div>{% endblock %}

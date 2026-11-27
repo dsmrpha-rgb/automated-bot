@@ -1,17 +1,19 @@
-{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
-{{ head(crumb=crumb, back=url_for('city_page', city=city) if cat != '-' else url_for('index'), city=city) }}
-<div class="prods">{% for k, p, cr in rows %}
- <div class="box prod"><div class="pic" style="background:#1a1320 center/cover"><img src="{{ product_image(p, cobj) }}" alt="" style="width:100%;height:100%;object-fit:cover">{% if p.weight %}<span class="tag">Weight - წონა: {{ p.weight }}</span>{% endif %}</div>
-  <div class="in"><div class="k">ТОВАР</div><div class="t">{{ p.name }}</div>
-   <div class="pair"><div><small>Стоимость</small><b>{{ money(p.price_usd) }}</b></div><div><small>В криптовалюте</small><b>{{ cr or '—' }}</b></div></div>
-   <div class="foot"><span class="stock {{ 'no' if p.quantity == 0 }}">{{ 'Нет в наличии' if p.quantity == 0 else 'В наличии' }}</span>
-   {% if p.quantity != 0 %}<a class="btn" href="{{ url_for('variants', slug=k) }}">Choose District - აირჩიეთ უბანი →</a>{% endif %}</div></div></div>
-{% else %}<div class="box" style="padding:20px;grid-column:1/-1">Nothing here yet.</div>{% endfor %}</div>
-<section class="box revs"><div class="revhead"><div><div class="kick">— Отзывы покупателей</div><h2>Голоса клиентов</h2>
- <div class="sub">Реальные впечатления о покупках, качестве и сервисе.</div><div class="sub" style="margin-top:8px">✓ Публикуем отзывы после модерации</div></div>
- <div class="count"><b>{{ total }}</b><small>отзывов</small></div></div>
-<div class="rgrid">{% for r in revs %}<div class="rev"><div class="u"><span class="av">{{ r.login[:1]|upper }}</span><div><b>{{ r.login }}</b><small>{{ r.city }}</small></div>{% if r.purchase %}<span class="badge">✓ Покупка</span>{% endif %}</div>
- {% if r.district %}<div class="loc">{{ r.city }}-{{ r.district }}</div>{% endif %}<p>{{ r.text }}</p>
- <div class="m"><span><small>ПОКУПКА</small><br>{{ r.product }}</span><span>{{ r.date }}</span></div></div>{% else %}<div class="sub" style="grid-column:1/-1">No reviews yet.</div>{% endfor %}</div>
-{% if pages > 1 %}<div class="pager">{% for n in range(1, pages + 1) %}{% if n == page %}<span class="on">{{ n }}</span>{% elif n <= 5 or n == pages %}<a href="?rp={{ n }}">{{ n }}</a>{% elif n == 6 %}<span>…</span>{% endif %}{% endfor %}{% if page < pages %}<a href="?rp={{ pages }}">Последняя »</a>{% endif %}</div>{% endif %}</section>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs, card_media %}{% from "_sidebar.html" import sidebar %}{% block main %}
+<div class="site-shell shop-page shop-catalog">
+{{ crumbs([(city|capitalize, url_for('city_page', city=city)), (cobj.name if cobj else 'Все товары', None)] if cobj else [(city|capitalize, None)]) }}
+<div class="shop-page-heading"><div><h1>{{ cobj.name if cobj else '☕️ MENU LIST ☕️' }}</h1></div></div>
+<div class="shop-catalog__layout">{{ sidebar(city, cats_all, cat) }}
+<div class="shop-grid shop-grid--products">{% for k, p, cr in rows %}
+<article class="shop-card shop-product-card">{% if p.quantity != 0 %}<a class="shop-card__link" href="{{ url_for('variants', slug=k) }}">{% else %}<div class="shop-card__link">{% endif %}
+{{ card_media(real_image(p, cobj)) }}
+<div class="shop-card__body"><div class="shop-product-card__meta"><span class="shop-stock">{{ 'Нет в наличии' if p.quantity == 0 else 'В наличии' }}</span>{% if p.weight %}<small class="shop-product-card__weight">Weight - წონა: {{ p.weight }}</small>{% endif %}</div>
+<h2>{{ p.name }}</h2><div class="shop-product-card__bottom"><div><strong class="shop-price">{{ money(p.price_usd) }}</strong>{% if cr %}<small class="shop-price-alt">≈ {{ cr }}</small>{% endif %}</div><span aria-hidden="true" class="shop-icon-button">→</span></div></div>
+{% if p.quantity != 0 %}</a>{% else %}</div>{% endif %}</article>
+{% else %}<div class="shop-empty" style="grid-column:1/-1"><h2>Nothing here yet.</h2></div>{% endfor %}</div></div>
+<section aria-labelledby="site-comments-title" class="shop-section shop-reviews"><div class="shop-section__heading"><h2 id="site-comments-title">Отзывы</h2><span class="shop-count">{{ total }}</span></div>
+<div class="shop-grid shop-grid--reviews">{% for r in revs %}
+<article class="shop-panel shop-review"><div class="shop-panel__body"><div class="shop-review__person"><span aria-hidden="true" class="shop-avatar">{{ r.login[:1]|upper }}</span><div><strong>{{ r.login }}</strong><small class="shop-muted">{{ r.city }}{% if r.district %} · {{ r.district }}{% endif %}</small></div></div>
+<p class="shop-review__text">{{ r.text }}</p><div class="shop-review__foot"><strong>{{ r.product }}</strong><time class="shop-muted">{{ r.date }}</time></div></div></article>
+{% else %}<div class="shop-empty" style="grid-column:1/-1">No reviews yet.</div>{% endfor %}</div>
+{% if pages > 1 %}<div class="shop-pagination"><nav><ul class="pagination">{% for n in range(1, pages + 1) %}{% if n == page %}<li class="page-item active"><a class="page-link">{{ n }}</a></li>{% elif n <= 5 %}<li class="page-item"><a class="page-link" href="?rp={{ n }}">{{ n }}</a></li>{% elif n == 6 and pages > 6 %}<li class="page-item disabled"><a class="page-link" href="#">&hellip;</a></li>{% endif %}{% endfor %}{% if page < pages %}<li class="page-item"><a class="page-link" href="?rp={{ pages }}">Последняя &raquo;</a></li>{% endif %}</ul></nav></div>{% endif %}
+</section></div>{% endblock %}

@@ -1,8 +1,12 @@
-{% extends "base.html" %}{% block body %}
-<div class="box auth"><h1>Sign in Website -<br>საიტზე შესვლა</h1>
-<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}">
-<label>Login - ლოგინი</label><input name="login" autocomplete="username" required autofocus>
-<label>Password - პაროლი</label><input name="password" type="password" autocomplete="current-password" placeholder="Password - პაროლი" required>
-<button class="go">☠ Sign in - შესვლა ☠</button></form>
-<div class="note">No account? <a href="{{ url_for('register', next=request.args.get('next','')) }}" style="color:#6fa8ff">Registration - რეგისტრაცია</a></div></div>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs %}{% block main %}
+<div class="site-shell shop-page">
+{{ crumbs([('Sign in Website - საიტზე შესვლა', None)]) }}
+{% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="shop-note shop-note--warning" role="alert" style="margin-block-end:1rem">{{ msg }}</div>{% endfor %}
+<div class="shop-auth shop-auth--single"><section aria-labelledby="shop-auth-title" class="shop-panel shop-auth__form"><div class="shop-panel__body">
+<h1 id="shop-auth-title">Sign in Website - საიტზე შესვლა</h1>
+<form class="shop-form" method="post" accept-charset="UTF-8"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="shop-form__field"><label class="form-label" for="site_user_login">Login - ლოგინი</label><input autofocus class="form-control" autocomplete="username" type="text" name="login" id="site_user_login" required></div>
+<div class="shop-form__field"><label class="form-label" for="site_user_password">Password - პაროლი</label><input autocomplete="current-password" class="form-control" type="password" name="password" id="site_user_password" required></div>
+<input type="submit" value="☠️ Sign in - შესვლა ☠️" class="btn shop-button shop-button--primary w-100"></form>
+<div class="shop-auth__switch"><span>Первый заказ?</span><a class="shop-text-link" href="{{ url_for('register', next=request.args.get('next','')) }}">Registration - რეგისტრაცია✊🏻</a></div>
+</div></section></div></div>{% endblock %}

@@ -1,13 +1,21 @@
-{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
-<section class="box head"><div><div class="kick">Аккаунт</div><h1>👤 {{ me.login }}</h1><div class="sub">Balance - ბალანსი: <b style="color:var(--tx)">{{ money(me.balance) }}</b></div></div><a class="btn2" href="{{ url_for('index') }}">👈 Catalog - კატალოგი</a></section>
-<div class="acc">
- <section class="box"><h3>Fill up Balance - შეავსეთ ბალანსი</h3>
-  <div class="sub">Send crypto to a wallet below, then press the button — an admin credits your balance after the payment is confirmed.</div>
-  {% for c, w in wallets.items() %}<div class="sub" style="margin-top:10px"><b style="color:var(--tx)">{{ c }}</b></div><div class="wal">{{ w }}</div>{% else %}<div class="sub">No wallets configured.</div>{% endfor %}
-  <form method="post" action="{{ url_for('topup') }}" class="f" style="padding:0"><input type="hidden" name="csrf" value="{{ csrf }}">
-   <select name="coin">{% for c in wallets %}<option>{{ c }}</option>{% endfor %}</select><input name="txid" placeholder="Transaction id (optional)" maxlength="100"><button class="btn big">I paid - გადავრიცხე</button></form></section>
- <section class="box"><h3>My orders - ჩემი შეკვეთები</h3>
-  <table class="o">{% for o in orders %}<tr><td>#{{ o.id }}</td><td><a href="{{ url_for('order', pid=o.id) }}" style="color:var(--teal)">{{ o.product }}</a><br><span class="sub">{{ o.note }}</span></td><td>{{ money(o.price_usd) }}</td><td class="sub">{{ o.date }}</td></tr>
-  {% else %}<tr><td class="sub">No orders yet.</td></tr>{% endfor %}</table></section>
-</div>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs %}{% block main %}
+<div class="site-shell shop-page">
+{{ crumbs([('Аккаунт', None)]) }}
+{% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="shop-note {{ 'shop-note--success' if cat == 'ok' else 'shop-note--warning' }}" role="alert" style="margin-block-end:1rem">{{ msg }}</div>{% endfor %}
+<div class="shop-page-heading shop-profile-heading"><div class="shop-profile-heading__identity"><span aria-hidden="true" class="shop-avatar shop-avatar--large">{{ me.login[:1]|upper }}</span><div><h1>{{ me.login }}</h1><p class="shop-muted">Website account</p></div></div>
+<div class="shop-profile-heading__balance"><span>Balance - ბალანსი</span><strong>{{ money(me.balance) }}</strong></div></div>
+<section class="shop-panel shop-top-up"><div class="shop-panel__body shop-top-up__body">
+<div class="shop-top-up__intro"><h2>Fill up Balance - შეავსეთ ბალანსი</h2><p class="shop-muted">Send crypto to a wallet below, then press the button — an admin credits your balance after the payment is confirmed.</p></div>
+<div>{% for c, w in wallets.items() %}<div class="shop-wallet" style="margin-block-end:.75rem"><div class="shop-wallet__address"><span class="shop-muted">{{ c }}</span><code data-wallet-address>{{ w }}</code><button type="button" class="btn shop-button shop-button--secondary shop-wallet__copy" data-wallet-copy data-copy-success="Copied ✓" data-copy-error="Copy failed">Copy</button><p class="shop-wallet__copy-status" data-wallet-copy-status aria-live="polite"></p></div></div>{% else %}<p class="shop-muted">No wallets configured.</p>{% endfor %}
+{% if wallets %}<form method="post" action="{{ url_for('topup') }}" class="shop-form"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="shop-form__field"><label class="form-label" for="coin">Coin</label><select class="form-select" id="coin" name="coin">{% for c in wallets %}<option>{{ c }}</option>{% endfor %}</select></div>
+<div class="shop-form__field"><label class="form-label" for="txid">Transaction id (optional)</label><input class="form-control" id="txid" name="txid" maxlength="100"></div>
+<button class="btn shop-button shop-button--primary">I paid - გადავრიცხე</button></form>{% endif %}</div>
+</div></section>
+<section class="shop-profile__orders"><div class="shop-section__heading"><h2>My orders - ჩემი შეკვეთები</h2><span class="shop-count">{{ orders|length }}</span></div>
+<div class="shop-order-list">{% for o in orders %}
+<article class="shop-panel shop-order shop-order--compact"><div class="shop-order__top"><div><span class="shop-stock">Оплачен</span><h2>{{ o.product }}</h2><time class="shop-muted">{{ o.date }}</time></div><strong class="shop-price">{{ money(o.price_usd) }}</strong></div>
+<p class="shop-order__location">#{{ o.id }} · {{ o.note }}</p>
+<div class="shop-order__actions"><a class="btn shop-button shop-button--primary" href="{{ url_for('order', pid=o.id) }}">Открыть заказ</a></div></article>
+{% else %}<div class="shop-empty"><h3>No orders yet.</h3></div>{% endfor %}</div></section>
+</div>{% endblock %}

@@ -1,6 +1,9 @@
-{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
-{{ head(back=url_for('index'), city=city) }}
-<div class="grid">{% for k, c in cats.items() %}
- <a class="box card" href="{{ url_for('products', city=city, cat=k) }}"><div class="pic"><img src="{{ media(c.image) if c.image else url_for('static', filename='gift.svg') }}" alt=""><span class="tag">Категория</span></div>
- <div class="nm">{{ c.name }}</div><span class="btn go">Choose Product - აირჩიეთ პროდუქტი</span></a>{% endfor %}</div>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs, card_media %}{% from "_sidebar.html" import sidebar %}{% block main %}
+<div class="site-shell shop-page shop-catalog">
+{{ crumbs([(city|capitalize, None)]) }}
+<div class="shop-page-heading"><h1>☕️ MENU LIST ☕️</h1></div>
+<div class="shop-catalog__layout">{{ sidebar(city, none, '') }}
+<section aria-labelledby="shop-categories-title" class="shop-category-section"><h2 id="shop-categories-title">Выберите категорию</h2>
+<div class="shop-grid shop-grid--categories">{% for k, c in cats.items() %}
+<article class="shop-card shop-category-card"><a class="shop-card__link" href="{{ url_for('products', city=city, cat=k) }}">{{ card_media(media_url(c.image) if c.image else '') }}<div class="shop-card__body"><div class="shop-category-card__title"><h3>{{ c.name }}</h3><span aria-hidden="true" class="shop-icon-button">→</span></div></div></a></article>
+{% endfor %}</div></section></div></div>{% endblock %}

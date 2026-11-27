@@ -1,11 +1,15 @@
-{% extends "base.html" %}{% block body %}
-<section class="sec"><div class="kick">Каталог</div><h1>City - ქალაქები 🗼</h1>
-<p>Choose the city in which you want to place an order - აირჩიეთ ქალაქი სადაც გინდათ შეკვეთა</p></section>
-<div class="grid">{% for c in cities %}
-  <a class="box card" href="{{ url_for('city_page', city=c.name) }}">
-    <div class="pic" style="background-image:linear-gradient(180deg,#0a1530,#1b2a55)">{% if c.image %}<img src="{{ media(c.image) }}" alt="">{% endif %}<span class="tag">Город</span></div>
-    <div class="nm">{{ c.name|capitalize }}</div><span class="btn go">Choose Product - აირჩიეთ პროდუქტი →</span></a>
-{% else %}<div class="box" style="padding:20px;grid-column:1/-1">No cities yet.</div>{% endfor %}</div>
-<section class="sec" style="margin-top:34px"><div class="kick">Связь</div><h1>Полезные ссылки</h1></section>
-<div class="links">{% for g in site.links %}<div class="lk"><div class="ic">{{ g.icon or '↗' }}</div><b>{{ g.title }}</b>{% for l in g['items'] %}<a href="{{ l if l.startswith('http') else 'https://' + l }}" target="_blank" rel="noopener">{{ l }}</a>{% endfor %}</div>{% endfor %}</div>
-{% endblock %}
+{% extends "base.html" %}{% block main %}
+<div class="site-shell shop-home">
+ <div class="shop-home__banners">
+  <div class="shop-hero shop-hero--catalog"><a class="shop-hero__card" href="#cities"><div class="shop-hero__copy"><h1 class="shop-hero__title">Выбрать товар</h1><span aria-hidden="true" class="shop-hero__arrow">↓</span></div><div class="shop-hero__visual"><div aria-hidden="true" class="shop-hero__art"><span></span></div></div></a></div>
+  <div class="shop-hero"><a class="shop-hero__card" href="{{ site.links[1]['items'][0] if site.links|length > 1 and site.links[1]['items'] else '#' }}"><div class="shop-hero__copy"><h2 class="shop-hero__title">{{ site.brand }}</h2><span aria-hidden="true" class="shop-hero__arrow">↗</span></div><div class="shop-hero__visual"><div class="shop-media shop-hero__media"><img alt="" loading="lazy" decoding="async" src="{{ url_for('static', filename='banner.jpg') }}"></div></div></a></div>
+ </div>
+ <section aria-labelledby="shop-cities-title" class="shop-cities shop-cities--compact shop-panel" id="cities">
+  <div class="shop-section__heading"><h2 id="shop-cities-title">City - ქალაქები 🗼</h2><p>Choose the city in which you want to place an order - აირჩიეთ ქალაქი სადაც გინდათ შეკვეთა</p></div>
+  <div class="shop-grid shop-grid--locations" id="cities-grid">{% for c in cities %}
+   <a class="shop-location" data-name="{{ c.name|capitalize }}" href="{{ url_for('city_page', city=c.name) }}">
+    {% if c.image %}<img class="shop-location__photo" alt="" loading="lazy" decoding="async" src="{{ media(c.image) }}">{% else %}<span aria-hidden="true" class="shop-location__icon"><span class="shop-pin"></span></span>{% endif %}
+    <span class="shop-location__copy"><strong>{{ c.name|capitalize }}</strong><small class="visually-hidden">Choose Product - აირჩიეთ პროდუქტი</small></span><span aria-hidden="true" class="shop-location__arrow">→</span></a>
+  {% else %}<div class="shop-empty" style="grid-column:1/-1">No cities yet.</div>{% endfor %}</div>
+ </section>
+</div>{% endblock %}

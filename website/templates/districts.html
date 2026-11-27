@@ -1,6 +1,11 @@
-{% extends "base.html" %}{% from "_head.html" import head %}{% block body %}
-{{ head(crumb=crumb, back=url_for('variants', slug=slug)) }}
-<div class="grid">{% for k, d in ds_.items() %}
- <a class="box card" href="{{ url_for('checkout', p=slug, v=variant, d=k) }}"><div class="pic"><img src="{{ media(d.image) if d.image else product_image(p, cat) }}" alt=""><span class="tag">Район</span></div>
- <div class="nm">{{ d.name }}</div><span class="btn go">Select - არჩევა</span></a>{% endfor %}</div>
-{% endblock %}
+{% extends "base.html" %}{% from "_crumbs.html" import crumbs %}{% block main %}
+<div class="site-shell shop-page">
+{{ crumbs([(p.city|capitalize, url_for('city_page', city=p.city)), (p.name, url_for('variants', slug=slug)), ('Choose District - აირჩიეთ უბანი 🌃', None)]) }}
+<div class="shop-purchase">
+<article class="shop-panel shop-purchase-product"><div class="shop-media shop-purchase-product__media">{% if real_image(p, cat) %}<img alt="" decoding="async" src="{{ real_image(p, cat) }}">{% else %}<span aria-hidden="true" class="shop-media__placeholder"></span>{% endif %}</div>
+<div class="shop-panel__body"><p class="shop-purchase-product__name">{{ p.name }}</p><p class="shop-purchase-product__description">{{ VARIANTS[variant] }} · {{ p.city|capitalize }}</p><strong class="shop-price shop-price--large">{{ money(p.price_usd) }}</strong></div></article>
+<section aria-labelledby="shop-district-title" class="shop-panel shop-purchase-stage"><div class="shop-panel__body">
+<ol aria-label="Этапы заказа" class="shop-purchase-steps"><li class="is-complete">Вариант</li><li aria-current="step">Район</li><li>Оплата</li></ol>
+<h1 id="shop-district-title">Choose District - აირჩიეთ უბანი 🌃</h1>
+<div class="shop-option-list">{% for k, d in ds_.items() %}<a class="shop-location" href="{{ url_for('checkout', p=slug, v=variant, d=k) }}">{% if d.image %}<img alt="" class="shop-location__photo" loading="lazy" decoding="async" src="{{ media(d.image) }}">{% else %}<span aria-hidden="true" class="shop-location__icon"><span class="shop-pin"></span></span>{% endif %}<span class="shop-location__copy"><strong>{{ d.name }}</strong><small>Select - არჩევა</small></span><span aria-hidden="true" class="shop-location__arrow">→</span></a>{% else %}<div class="shop-empty">No districts.</div>{% endfor %}</div>
+</div></section></div></div>{% endblock %}
