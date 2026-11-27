@@ -101,7 +101,7 @@
     <h3 style="margin:12px 0 6px;font-size:14px">Website users <span id="siteucount" class="ga-small"></span></h3>
     <div class="ga-scroll"><table class="ga-table"><thead><tr><th>Login</th><th>Balance</th><th>Orders</th><th>Registered</th><th></th></tr></thead><tbody id="siteusers"></tbody></table></div>
     <div class="ga-row" style="margin-top:14px"><h3 style="margin:0;font-size:14px">Reviews</h3><span id="siterc" class="ga-small"></span><button class="btn btn-ghost btn-sm" id="siteradd">+ Add review</button></div>
-    <div class="ga-scroll"><table class="ga-table"><thead><tr><th>User</th><th>Where</th><th>Text</th><th>Status</th><th></th></tr></thead><tbody id="siterev"></tbody></table></div>
+    <div class="ga-scroll"><table class="ga-table"><thead><tr><th>User</th><th>Where</th><th>Text</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody id="siterev"></tbody></table></div>
   </div>
   <div class="card" id="catcard" hidden>
     <div class="ga-row"><h2 style="margin:0">Categories</h2><button class="btn btn-primary btn-sm" id="cadd">+ Add category</button></div>
@@ -462,15 +462,27 @@ function renderSite() {
   if (!d.users.length) ub.append(el('tr', {}, el('td', {colspan: 5, class: 'ga-small'}, 'No website users yet.')));
   $('#siterc').textContent = `(${d.reviews.filter(r => r.approved).length} published, ${d.reviews.filter(r => !r.approved).length} waiting)`;
   d.reviews.forEach(r => rb.append(el('tr', {}, el('td', {}, r.login), el('td', {class: 'ga-small'}, [r.city, r.district, r.product].filter(Boolean).join(' · ')), el('td', {style: 'max-width:340px;white-space:normal'}, r.text),
+    el('td', {class: 'ga-small', style: 'white-space:nowrap'}, r.date || '—'),
     el('td', {}, r.approved ? 'published' : '⏳ waiting'),
     el('td', {class: 'ga-row', style: 'gap:6px;justify-content:flex-end'},
+      el('button', {class: 'btn btn-ghost btn-sm', onclick: () => editReviewDate(r)}, 'Date'),
       el('button', {class: 'btn btn-ghost btn-sm', onclick: () => act('review', {id: r.id, action: r.approved ? 'hide' : 'approve'})}, r.approved ? 'Hide' : 'Publish'),
       el('button', {class: 'btn btn-red btn-sm', onclick: () => { if (confirm('Delete this review?')) act('review', {id: r.id, action: 'delete'}); }}, '×')))));
-  if (!d.reviews.length) rb.append(el('tr', {}, el('td', {colspan: 5, class: 'ga-small'}, 'No reviews yet. Buyers can write one from their order page; you publish it here.')));
+  if (!d.reviews.length) rb.append(el('tr', {}, el('td', {colspan: 6, class: 'ga-small'}, 'No reviews yet. Buyers can write one from their order page; you publish it here.')));
+}
+function nowLocalIso() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+function editReviewDate(r) {
+  const inp = el('input', {type: 'datetime-local', class: 'ga-in', style: 'width:100%', value: r.when || nowLocalIso(), max: nowLocalIso()});
+  modal(el('div', {}, el('h2', {}, 'Review date'), el('div', {class: 'ga-small', style: 'margin-bottom:8px'}, r.login + ' — shown on the website and used for the order of reviews (newest first).'), inp,
+    el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
+      if (!inp.value) { toast('Pick a date and time'); return; }
+      try { siteData = Object.assign(siteData, await api(`/${cur}/site/review`, {body: {id: r.id, action: 'date', when: inp.value}})); closeModal(); renderSite(); toast('Date changed'); } catch (e) {}
+    }}, 'Save'), el('button', {class: 'btn btn-ghost', onclick: closeModal}, 'Cancel'))));
 }
 $('#siteradd').addEventListener('click', () => {
   const f = {}, mk = (k, ph, ta) => { f[k] = el(ta ? 'textarea' : 'input', {class: ta ? 'ga-ta' : 'ga-in', placeholder: ph, style: 'width:100%'}); return [el('span', {class: 'ga-label'}, ph), f[k]]; };
   modal(el('div', {}, el('h2', {}, 'Add review'), ...mk('login', 'Name shown'), ...mk('city', 'City'), ...mk('district', 'District'), ...mk('product', 'Product'), ...mk('text', 'Review text', true),
+    el('span', {class: 'ga-label'}, 'Date and time shown on the website'), (f.when = el('input', {type: 'datetime-local', class: 'ga-in', style: 'width:100%', value: nowLocalIso(), max: nowLocalIso()})),
     el('div', {class: 'ga-row', style: 'margin-top:14px'}, el('button', {class: 'btn btn-primary', onclick: async () => {
       const review = Object.fromEntries(Object.entries(f).map(([k, n]) => [k, n.value]));
       try { siteData = Object.assign(siteData, await api(`/${cur}/site/review`, {body: {action: 'add', review}})); closeModal(); renderSite(); toast('Review added'); } catch (e) {}

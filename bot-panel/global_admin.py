@@ -372,6 +372,7 @@ class JsonAdapter:
         users = [{"login": u.get("login", k), "balance": float(u.get("balance", 0)), "banned": bool(u.get("banned")),
                   "created": u.get("created", ""), "orders": orders.get(k, 0)} for k, u in d.get("site_users", {}).items()]
         revs = sorted(d.get("site_reviews", []), key=lambda r: (r.get("approved", False), -r.get("ts", 0)))
+        revs = [dict(r, when=datetime.fromtimestamp(r["ts"]).strftime("%Y-%m-%dT%H:%M") if r.get("ts") else "") for r in revs]
         return {"site": s, "users": users, "reviews": revs,
                 "cities": sorted({str(x.get("city") or "tbilisi").lower() for x in d.get("districts", {}).values()}
                                  | {str(x.get("city") or "tbilisi").lower() for x in d.get("products", {}).values()}),
@@ -431,7 +432,18 @@ class JsonAdapter:
                 raise AdapterError("unknown action")
         self._site_mutate(fn)
 
-    def site_review_action(self, rid, action, review=None):
+    @staticmethod
+    def _review_when(value):
+        """'YYYY-MM-DDTHH:MM' (from the date picker) -> (text shown on the site, timestamp used for ordering)."""
+        try:
+            dt = datetime.strptime(str(value or "").strip()[:16].replace(" ", "T"), "%Y-%m-%dT%H:%M")
+        except ValueError:
+            raise AdapterError("invalid date, use the date picker")
+        if dt > datetime.now() + timedelta(days=1):
+            raise AdapterError("the date is in the future")
+        return dt.strftime("%d.%m.%Y · %H:%M"), dt.timestamp()
+
+    def site_review_action(self, rid, action, review=None, when=None):
         def fn(d):
             revs = d.setdefault("site_reviews", [])
             if action == "add":
@@ -439,10 +451,11 @@ class JsonAdapter:
                 login = str((review or {}).get("login") or "").strip()[:32]
                 if not text or not login:
                     raise AdapterError("login and text are required")
+                shown, stamp = self._review_when(review.get("when")) if str(review.get("when") or "").strip() else (datetime.now().strftime("%d.%m.%Y · %H:%M"), time.time())
                 revs.append({"id": max([r.get("id", 0) for r in revs] + [0]) + 1, "login": login,
                              "city": str(review.get("city") or "")[:40], "district": str(review.get("district") or "")[:60],
                              "product": str(review.get("product") or "")[:120], "text": text, "purchase": bool(review.get("purchase", True)),
-                             "approved": True, "date": datetime.now().strftime("%d.%m.%Y · %H:%M"), "ts": time.time()})
+                             "approved": True, "date": shown, "ts": stamp})
                 return
             r = next((x for x in revs if x.get("id") == rid), None)
             if not r:
@@ -453,6 +466,10 @@ class JsonAdapter:
                 r["approved"] = False
             elif action == "delete":
                 revs.remove(r)
+            elif action == "date":
+                r["date"], r["ts"] = self._review_when(when)
+            else:
+                raise AdapterError("unknown action")
         self._site_mutate(fn)
 
     # admin notifications (menu_config.json -> notifications: {admin id: {event: false}})
@@ -1309,7 +1326,7 @@ def api_site_user(bot):
 @api
 def api_site_review(bot):
     j = request.get_json() or {}
-    _site_ad(bot).site_review_action(j.get("id"), str(j.get("action")), j.get("review"))
+    _site_ad(bot).site_review_action(j.get("id"), str(j.get("action")), j.get("review"), j.get("when"))
     return jsonify(ok=True, **_site_ad(bot).site_get())
 
 
