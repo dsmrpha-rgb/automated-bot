@@ -77,7 +77,8 @@ def site_settings() -> dict:
 
 # ── shop ────────────────────────────────────────────────────────────────────
 def cities() -> list[str]:
-    return list(ds.get_cities())
+    """Tbilisi always comes first; the other cities follow alphabetically."""
+    return sorted(ds.get_cities(), key=lambda c: (c != "tbilisi", c))
 
 
 def settings_cities() -> list[dict]:
