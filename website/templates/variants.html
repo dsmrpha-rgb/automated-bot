@@ -3,7 +3,7 @@
 {% set trail = [(p.city|capitalize, url_for('city_page', city=p.city))] %}{% if cat.name %}{% set trail = trail + [(cat.name, url_for('products', city=p.city, cat=p.category))] %}{% endif %}{{ crumbs(trail + [(p.name, None)]) }}
 <div class="shop-purchase">
 <article class="shop-panel shop-purchase-product"><div class="shop-media shop-purchase-product__media">{% if real_image(p, cat) %}<img alt="" decoding="async" src="{{ real_image(p, cat) }}">{% else %}<span aria-hidden="true" class="shop-media__placeholder"></span>{% endif %}</div>
-<div class="shop-panel__body"><span class="shop-stock">{{ 'Нет в наличии' if p.quantity == 0 else 'В наличии' }}</span><h1 class="shop-purchase-product__name">{{ p.name }}</h1><strong class="shop-price shop-price--large">{{ money(p.price_usd) }}</strong>{% if p.weight %}<small class="shop-purchase-product__weight">Weight - წონა: {{ p.weight }}</small>{% endif %}</div></article>
+<div class="shop-panel__body"><span class="shop-stock">{{ 'Нет в наличии' if p.quantity == 0 else 'В наличии' }}</span><h1 class="shop-purchase-product__name">{{ p.name }}</h1><strong class="shop-price shop-price--large">{{ money(p.price_usd) }}</strong>{% if p.weight %}<small class="shop-purchase-product__weight">Weight - წონა: {{ p.weight }}</small>{% endif %}{% if p.description %}<p class="shop-muted" style="margin:10px 0 0;white-space:pre-line">{{ p.description }}</p>{% endif %}</div></article>
 <section aria-labelledby="shop-variant-title" class="shop-panel shop-purchase-stage"><div class="shop-panel__body">
 <ol aria-label="Этапы заказа" class="shop-purchase-steps"><li aria-current="step">Вариант</li><li>Район</li><li>Оплата</li></ol>
 <h2 id="shop-variant-title">Выберите вариант</h2>

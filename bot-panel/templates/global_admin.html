@@ -587,9 +587,33 @@ function productModal(p, owner = null) {
     }
     {
       field('weight', 'Weight tag on the website (e.g. 2.0)', inp(p?.weight || ''));
-      const imgSel = el('select', {class: 'ga-in', style: 'width:100%', onchange: () => {}}, el('option', {value: ''}, '— default —'));
-      fetch(`/bot/${cur}/api/images`).then(r => r.json()).then(j => (j.images || []).filter(i => i.kind !== 'video').forEach(im => imgSel.append(el('option', {value: im.name, selected: im.name === p?.image}, im.name))));
+      const imgSel = el('select', {class: 'ga-in', style: 'width:100%', onchange: () => showPrev()}, el('option', {value: ''}, '— default —'));
+      const known = new Set(), prev = el('img', {alt: '', style: 'display:none;max-width:160px;max-height:120px;border-radius:8px;margin-top:8px;object-fit:cover'});
+      const showPrev = () => { prev.style.display = imgSel.value ? 'block' : 'none'; if (imgSel.value) prev.src = `/bot/${cur}/api/image/${encodeURIComponent(imgSel.value)}`; };
+      const addOpt = (name, pick) => { if (!known.has(name)) { known.add(name); imgSel.append(el('option', {value: name}, name)); } if (pick) imgSel.value = name; showPrev(); };
+      fetch(`/bot/${cur}/api/images`).then(r => r.json()).then(j => { (j.images || []).filter(i => i.kind !== 'video').forEach(im => addOpt(im.name, false)); if (p?.image) imgSel.value = p.image; showPrev(); });
+      const uploadImg = async file => {
+        const ext = {'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif'}[file && file.type];
+        if (!ext) { toast('Use a PNG, JPG, WEBP or GIF picture', true); return; }
+        if (file.size > 8 * 1024 * 1024) { toast('Picture too large (max 8 MB)', true); return; }
+        const base = ((file.name || '').replace(/\.[^.]*$/, '').replace(/[^\w-]+/g, '_').slice(0, 40) || 'pasted').replace(/^image$/, 'pasted');
+        const fd = new FormData(); fd.append('file', file, `${base}-${Date.now()}${ext}`);   // unique name: never overwrites an existing picture
+        try {
+          const r = await fetch(`/bot/${cur}/api/images`, {method: 'POST', body: fd}), j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.name) { toast(j.error || 'Upload failed', true); return; }
+          addOpt(j.name, true); toast('Picture added and selected');
+        } catch (e) { toast('Upload failed', true); }
+      };
+      const fileIn = el('input', {type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', style: 'display:none', onchange: () => { if (fileIn.files[0]) uploadImg(fileIn.files[0]); fileIn.value = ''; }});
+      const onPaste = e => {
+        if (!imgSel.isConnected || !imgSel.offsetParent) { document.removeEventListener('paste', onPaste); return; }   // form closed or replaced
+        const it = [...((e.clipboardData && e.clipboardData.items) || [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
+        if (it) { e.preventDefault(); uploadImg(it.getAsFile()); }
+      };
+      document.addEventListener('paste', onPaste);
       field('image', 'Website picture', imgSel);
+      box.append(el('div', {class: 'ga-row', style: 'margin-top:8px;gap:10px;align-items:center'}, fileIn, el('button', {class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => fileIn.click()}, '⬆ Upload picture'),
+        el('span', {class: 'ga-small'}, 'or copy a picture and press Ctrl+V here')), prev);
     }
     {
       const dl = el('textarea', {class: 'ga-ta', style: 'min-height:70px', placeholder: 'e.g. coordinates, instructions, a code…'}); dl.value = p?.delivery_text || '';

@@ -7,7 +7,7 @@
 <article class="shop-card shop-product-card">{% if p.quantity != 0 %}<a class="shop-card__link" href="{{ url_for('variants', slug=k) }}">{% else %}<div class="shop-card__link">{% endif %}
 {{ card_media(real_image(p, cobj)) }}
 <div class="shop-card__body"><div class="shop-product-card__meta"><span class="shop-stock">{{ 'Нет в наличии' if p.quantity == 0 else 'В наличии' }}</span>{% if p.weight %}<small class="shop-product-card__weight">Weight - წონა: {{ p.weight }}</small>{% endif %}</div>
-<h2>{{ p.name }}</h2><div class="shop-product-card__bottom"><div><strong class="shop-price">{{ money(p.price_usd) }}</strong>{% if cr %}<small class="shop-price-alt">≈ {{ cr }}</small>{% endif %}</div><span aria-hidden="true" class="shop-icon-button">→</span></div></div>
+<h2>{{ p.name }}</h2>{% if p.description %}<p class="shop-muted shop-product-card__desc" style="margin:6px 0 10px;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden">{{ p.description }}</p>{% endif %}<div class="shop-product-card__bottom"><div><strong class="shop-price">{{ money(p.price_usd) }}</strong>{% if cr %}<small class="shop-price-alt">≈ {{ cr }}</small>{% endif %}</div><span aria-hidden="true" class="shop-icon-button">→</span></div></div>
 {% if p.quantity != 0 %}</a>{% else %}</div>{% endif %}</article>
 {% else %}<div class="shop-empty" style="grid-column:1/-1"><h2>Nothing here yet.</h2></div>{% endfor %}</div></div>
 {% include "_reviews.html" %}</div>{% endblock %}
