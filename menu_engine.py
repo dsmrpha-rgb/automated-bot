@@ -343,13 +343,13 @@ def _list_items(page: dict, uid: int | None = None) -> dict:
         if source == "cities":
             return {c: {"name": c.replace("_", " ").title()} for c in ds.get_cities()}
         if source == "districts":
-            items = ds.get_districts(city)
             pv = page.get("product_var")
-            if pv and v.get(pv):
-                allowed = ds.get_product_districts(v[pv])
-                if allowed:
-                    items = {k: x for k, x in items.items() if k in allowed}
-            return items
+            allowed = ds.get_product_districts(v[pv]) if (pv and v.get(pv)) else []
+            if allowed:
+                # The districts ticked on the product win, whichever city they are filed under
+                # (a Batumi product may use districts that were created under another city).
+                return {k: x for k, x in ds._load().get("districts", {}).items() if k in allowed}
+            return ds.get_districts(city)
         prods = ds.get_products(city, user_id=uid)
         if source == "categories":
             cats = ds.get_categories(city)
